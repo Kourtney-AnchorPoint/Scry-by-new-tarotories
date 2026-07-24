@@ -15,6 +15,7 @@ node_modules
 .npm-cache
 dist
 dist-ssr
+scry-aws-deploy*.zip
 *.local
 
 # Editor directories and files
