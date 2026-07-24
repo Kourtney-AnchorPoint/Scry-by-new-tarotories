@@ -50,6 +50,42 @@ function incrementDailyCount() {
   try { localStorage.setItem(DAILY_KEY(), (getDailyCount() + 1).toString()); } catch {}
 }
 
+function normalizeChanneledPayload(result) {
+  let payload = result?.response ?? result;
+
+  // Providers sometimes return the requested JSON as text or a fenced code
+  // block. Parse it before rendering so the user sees prose, not source code.
+  if (typeof payload === 'string') {
+    const cleaned = payload.trim()
+      .replace(/^```(?:json)?\s*/i, '')
+      .replace(/\s*```$/, '');
+    try {
+      payload = JSON.parse(cleaned);
+    } catch {
+      return { message: cleaned, visual_omens: [], song_sign: '' };
+    }
+  }
+
+  if (typeof payload?.message === 'string') {
+    const nested = payload.message.trim()
+      .replace(/^```(?:json)?\s*/i, '')
+      .replace(/\s*```$/, '');
+    if (nested.startsWith('{')) {
+      try {
+        payload = { ...payload, ...JSON.parse(nested) };
+      } catch {
+        // Keep ordinary prose unchanged.
+      }
+    }
+  }
+
+  return {
+    message: typeof payload?.message === 'string' ? payload.message : '',
+    visual_omens: Array.isArray(payload?.visual_omens) ? payload.visual_omens : [],
+    song_sign: typeof payload?.song_sign === 'string' ? payload.song_sign : '',
+  };
+}
+
 export default function Downloads() {
   const { isPremium } = useUserProfile();
   const [phase, setPhase] = useState('input');
@@ -228,10 +264,7 @@ The "message" field IS the product. Everything else is supplementary.`;
       return;
     }
 
-    // Some models wrap the JSON result in a `response` key — unwrap it.
-    const payload = typeof result === 'string'
-      ? { message: result }
-      : (result?.response ?? result);
+    const payload = normalizeChanneledPayload(result);
 
     const msg = payload?.message || '';
     if (!msg) {
