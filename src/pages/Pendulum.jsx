@@ -11,8 +11,44 @@ const ANSWERS = [
 ];
 
 function answerFor(question) {
-  const score = [...question.trim().toLowerCase()].reduce((sum, char, index) => sum + char.charCodeAt(0) * (index + 1), 0);
-  return ANSWERS[score % ANSWERS.length];
+  const roll = crypto.getRandomValues(new Uint32Array(1))[0] / 4294967296;
+  const answer = roll < 0.45 ? ANSWERS[0] : roll < 0.90 ? ANSWERS[1] : ANSWERS[2];
+  const lower = question.toLowerCase();
+  let message;
+
+  if (/(text|call|contact|reach out|message)/.test(lower)) {
+    message = answer.key === 'yes'
+      ? 'Reach out once, clearly and without chasing. Their response—or lack of one—is information.'
+      : answer.key === 'no'
+        ? 'Do not break the silence just to relieve today’s anxiety. Let their next action give you information.'
+        : 'Separate “Do I want contact?” from “Would contact be healthy?” and ask one of those instead.';
+  } else if (/(love|relationship|partner|ex|crush|person)/.test(lower)) {
+    message = answer.key === 'yes'
+      ? 'Explore it, but require consistency, reciprocity, and actions that match the words.'
+      : answer.key === 'no'
+        ? 'Chemistry is not enough to override inconsistency. Protect your peace and watch what they repeatedly do.'
+        : 'Ask about one observable next step instead of trying to determine the entire future of the connection.';
+  } else if (/(job|career|work|business|project)/.test(lower)) {
+    message = answer.key === 'yes'
+      ? 'Take one concrete, reversible step and measure the response before investing everything.'
+      : answer.key === 'no'
+        ? 'Pause this route and examine whether the timing, offer, or conditions—not your ability—are the problem.'
+        : 'Narrow this to the next decision: apply, accept, launch, wait, or walk away.';
+  } else if (/(money|buy|purchase|invest|pay)/.test(lower)) {
+    message = answer.key === 'yes'
+      ? 'Proceed only if the numbers work without wishful thinking and you can tolerate the downside.'
+      : answer.key === 'no'
+        ? 'Keep your money and wait. Pressure and urgency are not proof that this is right.'
+        : 'Ask again after checking the cost, risk, and what happens if the outcome disappoints you.';
+  } else {
+    message = answer.key === 'yes'
+      ? 'Move forward with one grounded step. A real yes can survive patience, boundaries, and verification.'
+      : answer.key === 'no'
+        ? 'Do not force movement today. Notice what becomes clearer when you stop trying to make the answer change.'
+        : 'The question contains more than one decision. Rewrite it as one specific action you can take or decline.';
+  }
+
+  return { ...answer, message };
 }
 
 function loadHistory() {
