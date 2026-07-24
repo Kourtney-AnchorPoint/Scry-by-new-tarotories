@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Outlet, Link, useLocation } from 'react-router-dom';
-import { Sparkles, Sun, BookOpen, Hash, LayoutDashboard, Menu, X, Crown, Star, ChevronLeft, UserCircle, LogOut, Heart, Zap, Flame, BarChart3, Gem } from 'lucide-react';
+import { Sparkles, Sun, BookOpen, Hash, LayoutDashboard, Menu, X, Crown, Star, ChevronLeft, UserCircle, LogOut, Zap, Flame, BarChart3, Gem, Home } from 'lucide-react';
 import GuideOrb from '@/components/guide/GuideOrb';
 import WelcomeRitual from '@/components/onboarding/WelcomeRitual';
 import SignUpGate from '@/components/onboarding/SignUpGate';
@@ -40,7 +40,7 @@ export default function AppLayout() {
   }, [location.pathname, pushToTab]);
 
   const isTabRoot = TAB_ROOTS.includes(location.pathname);
-  const showBack = !isTabRoot && canGoBack();
+  const showBack = location.pathname !== '/';
   const pageLabel = navItems.find(n => location.pathname.startsWith(n.path === '/' ? '/__never__' : n.path))?.label
     ?? navItems.find(n => n.path === location.pathname)?.label
     ?? 'Scry';
@@ -63,18 +63,17 @@ export default function AppLayout() {
             <div className="flex items-center gap-2">
               {showBack ? (
                 <button
-                  onClick={goBack}
-                  className="md:hidden flex items-center justify-center w-11 h-11 rounded-lg hover:bg-secondary/50 text-muted-foreground select-none"
+                  onClick={() => canGoBack() ? goBack() : window.history.back()}
+                  className="flex items-center justify-center w-11 h-11 rounded-lg hover:bg-secondary/50 text-muted-foreground select-none"
                   aria-label="Go back"
+                  title="Back"
                 >
                   <ChevronLeft className="w-5 h-5" />
                 </button>
               ) : null}
 
               <Link to="/" className="flex items-center gap-2 select-none">
-                <div className="w-8 h-8 rounded-lg bg-violet/20 flex items-center justify-center glow-violet">
-                  <Sparkles className="w-5 h-5 text-violet" />
-                </div>
+                <img src="/scry-app-icon.png" alt="SCRY" className="w-9 h-9 rounded-xl object-cover border border-violet/30 shadow-[0_0_18px_rgba(212,21,154,.28)]" />
                 <span className="hidden sm:flex items-baseline gap-2">
                   <span className="font-heading text-base sm:text-lg font-semibold tracking-wide shimmer-text">Scry</span>
                   <span className="text-[10px] text-muted-foreground tracking-widest uppercase">by New Tarotories</span>
@@ -87,6 +86,16 @@ export default function AppLayout() {
                   }
                 </span>
               </Link>
+              {location.pathname !== '/' && (
+                <Link
+                  to="/"
+                  className="flex items-center justify-center w-11 h-11 rounded-lg hover:bg-secondary/50 text-muted-foreground select-none"
+                  aria-label="Home"
+                  title="Home"
+                >
+                  <Home className="w-5 h-5" />
+                </Link>
+              )}
             </div>
 
             {/* Desktop Nav */}
@@ -251,8 +260,8 @@ export default function AppLayout() {
 
       {/* Main Content */}
       <main
-        className="relative z-10"
-        style={{ paddingBottom: 'calc(env(safe-area-inset-bottom) + 56px)' }}
+        className="relative z-10 min-w-0 overflow-x-clip"
+        style={{ paddingBottom: 'calc(env(safe-area-inset-bottom) + 88px)' }}
       >
         <PullToRefresh onRefresh={handleRefresh}>
           <PageTransition>

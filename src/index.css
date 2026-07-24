@@ -90,6 +90,15 @@
     overscroll-behavior: none;
     -webkit-overflow-scrolling: touch;
     font-size: 17px;
+    min-height: 100%;
+    max-width: 100%;
+    overflow-x: hidden;
+  }
+
+  #root {
+    min-height: 100dvh;
+    max-width: 100%;
+    overflow-x: clip;
   }
 
   body {

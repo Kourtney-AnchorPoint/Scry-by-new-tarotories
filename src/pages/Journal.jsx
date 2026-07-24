@@ -1,7 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { BookOpen, Sparkles, Sun, Star, Hash, Trash2, ChevronDown, ChevronUp, PenLine, Calendar } from 'lucide-react';
-import { base44 } from '@/api/base44Client';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -19,6 +18,39 @@ const typeConfig = {
   numerology: { icon: Hash, color: 'text-violet', bg: 'bg-violet/20', label: 'Numerology' },
   cosmic_snapshot: { icon: Sparkles, color: 'text-gold', bg: 'bg-gold/20', label: 'Cosmic' },
 };
+
+const LOCAL_READINGS_KEY = 'scry_saved_readings';
+const LOCAL_JOURNAL_KEY = 'scry_journal_entries';
+
+function loadLocalCollection(key) {
+  try {
+    const value = JSON.parse(localStorage.getItem(key) || '[]');
+    return Array.isArray(value) ? value : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveLocalCollection(key, items) {
+  localStorage.setItem(key, JSON.stringify(items));
+  return items;
+}
+
+function createLocalEntry(key, data) {
+  const current = loadLocalCollection(key);
+  const entry = {
+    ...data,
+    id: crypto.randomUUID(),
+    created_date: new Date().toISOString(),
+  };
+  saveLocalCollection(key, [entry, ...current]);
+  return entry;
+}
+
+function deleteLocalEntry(key, id) {
+  saveLocalCollection(key, loadLocalCollection(key).filter((entry) => entry.id !== id));
+  return id;
+}
 
 function ReadingEntry({ reading, onDelete }) {
   const [expanded, setExpanded] = useState(false);
@@ -83,15 +115,12 @@ export default function Journal() {
   // Readings (saved from tarot/oracle/etc)
   const { data: readings = [], isLoading: readingsLoading } = useQuery({
     queryKey: ['readings'],
-    queryFn: async () => {
-      const me = await base44.auth.me();
-      return base44.entities.Reading.filter({ created_by_id: me.id }, '-created_date', 50);
-    },
+    queryFn: () => Promise.resolve(loadLocalCollection(LOCAL_READINGS_KEY)),
     initialData: [],
   });
 
   const deleteReading = useMutation({
-    mutationFn: (id) => base44.entities.Reading.delete(id),
+    mutationFn: (id) => Promise.resolve(deleteLocalEntry(LOCAL_READINGS_KEY, id)),
     onMutate: async (id) => {
       await queryClient.cancelQueries({ queryKey: ['readings'] });
       const previous = queryClient.getQueryData(['readings']);
@@ -109,15 +138,12 @@ export default function Journal() {
   // Personal journal reflections
   const { data: entries = [], isLoading: entriesLoading } = useQuery({
     queryKey: ['journal_entries'],
-    queryFn: async () => {
-      const me = await base44.auth.me();
-      return base44.entities.JournalEntry.filter({ created_by_id: me.id }, '-created_date', 100);
-    },
+    queryFn: () => Promise.resolve(loadLocalCollection(LOCAL_JOURNAL_KEY)),
     initialData: [],
   });
 
   const saveEntry = useMutation({
-    mutationFn: (data) => base44.entities.JournalEntry.create(data),
+    mutationFn: (data) => Promise.resolve(createLocalEntry(LOCAL_JOURNAL_KEY, data)),
     onSuccess: (_result, data) => {
       queryClient.invalidateQueries({ queryKey: ['journal_entries'] });
       trackEvent('journal_entry_created', { mood: data?.mood || '' });
@@ -125,7 +151,7 @@ export default function Journal() {
   });
 
   const deleteEntry = useMutation({
-    mutationFn: (id) => base44.entities.JournalEntry.delete(id),
+    mutationFn: (id) => Promise.resolve(deleteLocalEntry(LOCAL_JOURNAL_KEY, id)),
     onMutate: async (id) => {
       await queryClient.cancelQueries({ queryKey: ['journal_entries'] });
       const previous = queryClient.getQueryData(['journal_entries']);

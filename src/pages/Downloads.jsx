@@ -35,7 +35,7 @@ const FREE_SUBJECTS = [
 ];
 const PREMIUM_SUBJECTS = [];
 
-const FREE_DAILY_LIMIT = 1;
+const FREE_DAILY_LIMIT = 3;
 
 const DAILY_KEY = () => `channel_daily_${new Date().toISOString().split('T')[0]}`;
 
@@ -149,7 +149,7 @@ export default function Downloads() {
     // Check daily limit for free users on applicable types
     if (!isPremium && isDailyLimitType) {
       if (getDailyCount() >= FREE_DAILY_LIMIT) {
-        openPaywall("You've used today's free channeled message. Upgrade to Premium for unlimited messages, signs, songs, and follow-up questions.");
+        openPaywall("You've used today's 3 free channeled messages. Upgrade to Premium for unlimited messages, signs, songs, and follow-up questions.");
         return;
       }
     }
