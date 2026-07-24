@@ -35,11 +35,7 @@ const FREE_SUBJECTS = [
 ];
 const PREMIUM_SUBJECTS = [];
 
-const FREE_DAILY_LIMIT = 3;
-
-// The daily-limit types (free users get 1/day for these)
-const DAILY_LIMIT_TYPES = ["Romantic Partner", "Ex / Former Partner", "Situationship",
-  "Someone I'm Dating", "Crush / New Connection"];
+const FREE_DAILY_LIMIT = 1;
 
 const DAILY_KEY = () => `channel_daily_${new Date().toISOString().split('T')[0]}`;
 
@@ -115,7 +111,7 @@ export default function Downloads() {
   const isSpiritGuides = relationshipType === 'My Spirit Guides';
   const isPremiumSource = isHigherSelf || isSpiritGuides;
   const isPremiumSubject = PREMIUM_SUBJECTS.includes(subject);
-  const isDailyLimitType = DAILY_LIMIT_TYPES.includes(relationshipType);
+  const isDailyLimitType = !isPremiumSource;
 
   const canSubmit = personName.trim() && relationshipType && subject;
 
@@ -153,7 +149,7 @@ export default function Downloads() {
     // Check daily limit for free users on applicable types
     if (!isPremium && isDailyLimitType) {
       if (getDailyCount() >= FREE_DAILY_LIMIT) {
-        openPaywall("You've used your 3 free channeled messages today. Upgrade to Premium for unlimited messages.");
+        openPaywall("You've used today's free channeled message. Upgrade to Premium for unlimited messages, signs, songs, and follow-up questions.");
         return;
       }
     }
@@ -534,7 +530,7 @@ The "message" field IS the product. Everything else is supplementary.`;
           </div>
 
           {/* Signs to Watch For */}
-          {(visualOmens.length > 0 || songSign) && (
+          {isPremium && (visualOmens.length > 0 || songSign) && (
             <div className="border border-teal/20 rounded-2xl p-5 bg-teal/5 space-y-2">
               <div className="flex items-center gap-2 mb-1">
                 <Eye className="w-4 h-4 text-teal" />
@@ -606,8 +602,8 @@ The "message" field IS the product. Everything else is supplementary.`;
             </div>
           )}
 
-          {/* One Follow-Up Question */}
-          {message && (
+          {/* One Follow-Up Question — Premium keeps the channel open */}
+          {message && isPremium && (
             <FollowUpQuestion
               originalMessage={message}
               personName={personName}
@@ -615,6 +611,17 @@ The "message" field IS the product. Everything else is supplementary.`;
               subject={subject}
               sourceCardName={sourceCard?.name}
             />
+          )}
+
+          {message && !isPremium && (
+            <button
+              onClick={() => openPaywall("Premium unlocks signs, the matching song, a follow-up question, audio playback, and unlimited channeled messages.")}
+              className="w-full glass-card rounded-2xl p-5 border border-gold/30 text-center hover:border-gold/60 transition-colors"
+            >
+              <Crown className="w-5 h-5 text-gold mx-auto mb-2" />
+              <span className="block text-sm text-foreground">Unlock the rest of this channel</span>
+              <span className="block text-xs text-muted-foreground mt-1">Signs, song, follow-up question, audio, and unlimited messages</span>
+            </button>
           )}
 
           {sourceCard && (
