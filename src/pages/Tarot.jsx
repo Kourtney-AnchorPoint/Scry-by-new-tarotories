@@ -161,10 +161,28 @@ Provide the following sections:
         },
       });
     } catch (error) {
-      setReading(null);
-      setPhase('drawn');
+      // The recovered Base44 AI endpoint may be unavailable while the AWS
+      // replacement is being connected. Keep the core reading experience
+      // functional with the deck's authored meanings instead of showing a 404.
+      const cardReadings = drawnCards.map((card, index) => ({
+        position: spread.positions[index],
+        card: card.name,
+        interpretation: card.isReversed ? card.reversed : card.meaning,
+      }));
+      const names = drawnCards.map((card) => card.name).join(', ');
+      const localReading = {
+        opening: 'The cards are not asking you to predict your life. They are asking you to notice what is already moving inside it.',
+        card_readings: cardReadings,
+        synthesis: `Together, ${names} point to a moment that needs honesty more than urgency. Notice the pattern connecting these cards: what you are carrying, what needs your attention now, and what becomes possible when you respond deliberately. You do not have to solve everything today. Choose the next decision that brings you closer to your own peace.`,
+        closing: 'You are doing the best you can with what you have—be as kind to yourself as you would be to someone you love.',
+        visual_omen: 'Watch for a small light appearing where you expected darkness.',
+        song_sign: 'The next lyric that makes you stop and listen is part of the message.',
+      };
+      setReading(localReading);
+      setPhase('reading');
       setLoadingReading(false);
-      setReadingError(error?.message || 'The cards couldn\'t be read right now. Please try again.');
+      setReadingError(null);
+      console.info('Using the local tarot reading engine while the AWS reading service is unavailable.', error);
     }
   };
 
