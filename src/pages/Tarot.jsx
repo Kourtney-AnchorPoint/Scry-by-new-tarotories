@@ -106,7 +106,26 @@ The synthesis must weave all three timeframes into one cohesive narrative arc: w
       : '';
 
     try {
-      const result = await base44.integrations.Core.InvokeLLM({
+      let result;
+      const awsApiUrl = import.meta.env.VITE_SCRY_API_URL;
+      if (awsApiUrl) {
+        const awsResponse = await fetch(`${awsApiUrl.replace(/\/$/, '')}/readings/tarot`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            spread: { id: selectedSpread, name: spread.name },
+            cards: drawnCards.map((card, index) => ({
+              name: card.name,
+              position: spread.positions[index],
+              reversed: card.isReversed,
+              meaning: card.isReversed ? card.reversed : card.meaning,
+            })),
+          }),
+        });
+        if (!awsResponse.ok) throw new Error(`AWS reading service returned ${awsResponse.status}`);
+        result = await awsResponse.json();
+      } else {
+        result = await base44.integrations.Core.InvokeLLM({
         prompt: `You are a Compassionate Truth-Teller — a tarot reader who speaks like a mentor who has been through the fire themselves. You have lived experience. You've felt heartbreak, confusion, self-doubt, and you came out the other side. You share that wisdom with warmth, never from a place of judgment.
 
 Your voice: Direct but gentle. Second person ("You"). Use relatable human moments — phrases like "I've been exactly where you are," "I remember feeling this same confusion," or "I know how hard this is, because I've sat in it too." Always hold the user's hand through the hard truth and guide them toward the solution. The goal is self-love, not just being right.
@@ -145,7 +164,8 @@ Provide the following sections:
           },
           required: ["opening", "card_readings", "synthesis", "closing", "visual_omen", "song_sign"]
         }
-      });
+        });
+      }
 
       setReading(result);
       setPhase('reading');

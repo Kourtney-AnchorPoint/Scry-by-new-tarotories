@@ -1,0 +1,187 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: SCRY application API - isolated backend resources
+
+Parameters:
+  BedrockModelId:
+    Type: String
+    Default: amazon.nova-lite-v1:0
+
+Resources:
+  ApiLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: /aws/apigateway/scry-api
+      RetentionInDays: 30
+
+  ReadingFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: scry-reading-function-role
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: ScryReadingFunctionPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: arn:aws:logs:*:*:*
+              - Effect: Allow
+                Action:
+                  - bedrock:InvokeModel
+                Resource: !Sub arn:aws:bedrock:${AWS::Region}::foundation-model/${BedrockModelId}
+
+  ReadingFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: scry-tarot-reading
+      Description: Generates structured SCRY tarot readings with Amazon Bedrock
+      Runtime: python3.12
+      Handler: index.handler
+      Role: !GetAtt ReadingFunctionRole.Arn
+      Timeout: 45
+      MemorySize: 256
+      Environment:
+        Variables:
+          BEDROCK_MODEL_ID: !Ref BedrockModelId
+      Code:
+        ZipFile: |
+          import json
+          import os
+          import boto3
+
+          bedrock = boto3.client("bedrock-runtime")
+
+          def response(status, body):
+              return {
+                  "statusCode": status,
+                  "headers": {
+                      "content-type": "application/json",
+                      "access-control-allow-origin": "*",
+                  },
+                  "body": json.dumps(body),
+              }
+
+          def handler(event, context):
+              try:
+                  payload = json.loads(event.get("body") or "{}")
+                  spread = payload.get("spread") or {}
+                  cards = payload.get("cards") or []
+                  if not cards:
+                      return response(400, {"error": "At least one card is required."})
+                  if len(cards) > 10:
+                      return response(400, {"error": "No more than ten cards are allowed."})
+
+                  card_lines = []
+                  for index, card in enumerate(cards):
+                      position = card.get("position") or f"Card {index + 1}"
+                      orientation = "Reversed" if card.get("reversed") else "Upright"
+                      meaning = card.get("meaning") or ""
+                      card_lines.append(f'{position}: {card.get("name", "Unknown")} ({orientation}) — {meaning}')
+
+                  prompt = f"""
+          You are SCRY's Compassionate Truth-Teller: direct, warm, grounded, and never fatalistic.
+          Read the cards as tools for reflection and personal agency. Avoid mystical filler.
+
+          Spread: {spread.get("name", "Tarot Reading")}
+          Cards:
+          {chr(10).join(card_lines)}
+
+          Return ONLY valid JSON with this exact shape:
+          {{
+            "opening": "2-3 warm sentences",
+            "card_readings": [
+              {{"position": "position name", "card": "card name", "interpretation": "2-3 specific sentences"}}
+            ],
+            "synthesis": "one integrated, empowering narrative without repeating each card",
+            "closing": "one strong, compassionate sentence",
+            "visual_omen": "one grounded visual symbol to notice",
+            "song_sign": "one grounded music-related reflection"
+          }}
+          """
+
+                  result = bedrock.converse(
+                      modelId=os.environ["BEDROCK_MODEL_ID"],
+                      messages=[{"role": "user", "content": [{"text": prompt}]}],
+                      inferenceConfig={"maxTokens": 1800, "temperature": 0.65},
+                  )
+                  text = result["output"]["message"]["content"][0]["text"].strip()
+                  if text.startswith("```"):
+                      text = text.split("\n", 1)[1].rsplit("```", 1)[0].strip()
+                  reading = json.loads(text)
+                  return response(200, reading)
+              except json.JSONDecodeError:
+                  return response(502, {"error": "The reading service returned an invalid response."})
+              except Exception as error:
+                  print(f"reading_error={type(error).__name__}: {error}")
+                  return response(500, {"error": "The reading service is temporarily unavailable."})
+
+  ScryApi:
+    Type: AWS::ApiGatewayV2::Api
+    Properties:
+      Name: scry-api
+      ProtocolType: HTTP
+      CorsConfiguration:
+        AllowOrigins:
+          - '*'
+        AllowHeaders:
+          - content-type
+        AllowMethods:
+          - POST
+          - OPTIONS
+
+  ReadingIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref ScryApi
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !GetAtt ReadingFunction.Arn
+      PayloadFormatVersion: '2.0'
+      TimeoutInMillis: 29000
+
+  ReadingRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref ScryApi
+      RouteKey: POST /readings/tarot
+      Target: !Sub integrations/${ReadingIntegration}
+
+  ApiStage:
+    Type: AWS::ApiGatewayV2::Stage
+    Properties:
+      ApiId: !Ref ScryApi
+      StageName: '$default'
+      AutoDeploy: true
+      DefaultRouteSettings:
+        ThrottlingBurstLimit: 5
+        ThrottlingRateLimit: 2
+      AccessLogSettings:
+        DestinationArn: !GetAtt ApiLogGroup.Arn
+        Format: >-
+          {"requestId":"$context.requestId","routeKey":"$context.routeKey","status":"$context.status","responseLength":"$context.responseLength","integrationError":"$context.integrationErrorMessage"}
+
+  ReadingInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref ReadingFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ScryApi}/*/*/readings/tarot
+
+Outputs:
+  ApiUrl:
+    Description: SCRY API base URL
+    Value: !GetAtt ScryApi.ApiEndpoint
+  TarotReadingUrl:
+    Description: Live Tarot reading endpoint
+    Value: !Sub ${ScryApi.ApiEndpoint}/readings/tarot
