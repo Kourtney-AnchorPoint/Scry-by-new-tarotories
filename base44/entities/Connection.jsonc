@@ -1,0 +1,68 @@
+{
+  "name": "Connection",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "Name of the connection (friend, partner, etc.)"
+    },
+    "birth_date": {
+      "type": "string",
+      "format": "date",
+      "description": "Birth date of the connection"
+    },
+    "birth_time": {
+      "type": "string",
+      "description": "Birth time (HH:MM) or 'unknown'"
+    },
+    "birth_location": {
+      "type": "string",
+      "description": "Birth location (City, State, Country)"
+    }
+  },
+  "required": [
+    "name",
+    "birth_date"
+  ],
+  "rls": {
+    "create": {
+      "created_by_id": "{{user.id}}"
+    },
+    "read": {
+      "$or": [
+        {
+          "created_by_id": "{{user.id}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "update": {
+      "$or": [
+        {
+          "created_by_id": "{{user.id}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "delete": {
+      "$or": [
+        {
+          "created_by_id": "{{user.id}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    }
+  }
+}

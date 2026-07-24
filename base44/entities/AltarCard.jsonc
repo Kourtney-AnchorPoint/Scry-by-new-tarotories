@@ -1,0 +1,63 @@
+{
+  "name": "AltarCard",
+  "type": "object",
+  "properties": {
+    "card_name": {
+      "type": "string",
+      "description": "Name of the tarot card or personal label"
+    },
+    "card_image_url": {
+      "type": "string",
+      "description": "URL of the uploaded card photo"
+    },
+    "notes": {
+      "type": "string",
+      "description": "Personal notes about the card"
+    }
+  },
+  "required": [
+    "card_name",
+    "card_image_url"
+  ],
+  "rls": {
+    "create": {
+      "created_by_id": "{{user.id}}"
+    },
+    "read": {
+      "$or": [
+        {
+          "created_by_id": "{{user.id}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "update": {
+      "$or": [
+        {
+          "created_by_id": "{{user.id}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "delete": {
+      "$or": [
+        {
+          "created_by_id": "{{user.id}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    }
+  }
+}

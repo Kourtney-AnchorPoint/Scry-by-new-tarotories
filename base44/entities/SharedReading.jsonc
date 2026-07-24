@@ -1,0 +1,64 @@
+{
+  "name": "SharedReading",
+  "type": "object",
+  "properties": {
+    "title": {
+      "type": "string",
+      "description": "Display title, e.g. 'You & Alex'"
+    },
+    "inviter_name": {
+      "type": "string",
+      "description": "Name of the person who shared the reading"
+    },
+    "connection_name": {
+      "type": "string",
+      "description": "Name of the connection the reading is about"
+    },
+    "report": {
+      "type": "object",
+      "description": "Snapshot of the synastry report (bond_tier, chemistry, frictions, long_term_potential)"
+    },
+    "user_big_three": {
+      "type": "object",
+      "description": "Inviter's sun/moon/rising signs"
+    },
+    "connection_big_three": {
+      "type": "object",
+      "description": "Connection's sun/moon/rising signs"
+    }
+  },
+  "required": [
+    "title",
+    "report"
+  ],
+  "rls": {
+    "create": {
+      "created_by_id": "{{user.id}}"
+    },
+    "read": {},
+    "update": {
+      "$or": [
+        {
+          "created_by_id": "{{user.id}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "delete": {
+      "$or": [
+        {
+          "created_by_id": "{{user.id}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    }
+  }
+}

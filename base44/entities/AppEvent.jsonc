@@ -1,0 +1,56 @@
+{
+  "name": "AppEvent",
+  "type": "object",
+  "properties": {
+    "event_name": {
+      "type": "string",
+      "description": "Name of the tracked event, e.g. tarot_reading_completed"
+    },
+    "properties": {
+      "type": "object",
+      "description": "Event properties payload"
+    },
+    "session_id": {
+      "type": "string",
+      "description": "Anonymous visitor session identifier"
+    },
+    "user_email": {
+      "type": "string",
+      "description": "Email if the visitor was signed in"
+    },
+    "is_anonymous": {
+      "type": "boolean",
+      "default": true,
+      "description": "True if the visitor was not signed in"
+    },
+    "path": {
+      "type": "string",
+      "description": "Page path where the event occurred"
+    }
+  },
+  "required": [
+    "event_name"
+  ],
+  "rls": {
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "read": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  }
+}

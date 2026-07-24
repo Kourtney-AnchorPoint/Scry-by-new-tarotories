@@ -1,0 +1,111 @@
+{
+  "name": "UserProfile",
+  "type": "object",
+  "properties": {
+    "display_name": {
+      "type": "string"
+    },
+    "birth_date": {
+      "type": "string",
+      "format": "date",
+      "description": "User's birth date for astrology/numerology"
+    },
+    "birth_time": {
+      "type": "string",
+      "description": "Birth time for rising sign calculation"
+    },
+    "birth_location": {
+      "type": "string",
+      "description": "Birth city for chart calculation"
+    },
+    "birth_zip": {
+      "type": "string",
+      "description": "Birth zip/postal code for precise geocoding"
+    },
+    "sun_sign": {
+      "type": "string",
+      "enum": [
+        "aries",
+        "taurus",
+        "gemini",
+        "cancer",
+        "leo",
+        "virgo",
+        "libra",
+        "scorpio",
+        "sagittarius",
+        "capricorn",
+        "aquarius",
+        "pisces"
+      ]
+    },
+    "moon_sign": {
+      "type": "string"
+    },
+    "rising_sign": {
+      "type": "string"
+    },
+    "life_path_number": {
+      "type": "number"
+    },
+    "is_premium": {
+      "type": "boolean",
+      "default": false
+    },
+    "stripe_customer_id": {
+      "type": "string",
+      "description": "Stripe customer ID for subscription management"
+    },
+    "full_name": {
+      "type": "string",
+      "description": "Full name for numerology"
+    },
+    "description": {
+      "type": "string",
+      "maxLength": 1000,
+      "description": "Optional user-provided description or bio"
+    }
+  },
+  "required": [],
+  "rls": {
+    "create": {
+      "created_by_id": "{{user.id}}"
+    },
+    "read": {
+      "$or": [
+        {
+          "created_by_id": "{{user.id}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "update": {
+      "$or": [
+        {
+          "created_by_id": "{{user.id}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "delete": {
+      "$or": [
+        {
+          "created_by_id": "{{user.id}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    }
+  }
+}

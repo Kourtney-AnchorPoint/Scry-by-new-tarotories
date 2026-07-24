@@ -1,0 +1,94 @@
+{
+  "name": "Reading",
+  "type": "object",
+  "properties": {
+    "type": {
+      "type": "string",
+      "enum": [
+        "tarot",
+        "astrology",
+        "oracle",
+        "numerology",
+        "cosmic_snapshot"
+      ],
+      "description": "Type of reading"
+    },
+    "title": {
+      "type": "string",
+      "description": "Title of the reading"
+    },
+    "spread_type": {
+      "type": "string",
+      "description": "Type of spread used (for tarot)"
+    },
+    "cards_drawn": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      },
+      "description": "Cards drawn in the reading"
+    },
+    "reading_text": {
+      "type": "string",
+      "description": "AI-generated reading interpretation"
+    },
+    "summary": {
+      "type": "string",
+      "description": "Short summary of the reading"
+    },
+    "is_saved": {
+      "type": "boolean",
+      "default": false,
+      "description": "Whether user saved this to journal"
+    },
+    "notes": {
+      "type": "string",
+      "description": "User's personal notes on the reading"
+    }
+  },
+  "required": [
+    "type",
+    "title"
+  ],
+  "rls": {
+    "create": {
+      "created_by_id": "{{user.id}}"
+    },
+    "read": {
+      "$or": [
+        {
+          "created_by_id": "{{user.id}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "update": {
+      "$or": [
+        {
+          "created_by_id": "{{user.id}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "delete": {
+      "$or": [
+        {
+          "created_by_id": "{{user.id}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    }
+  }
+}
