@@ -3,7 +3,7 @@ import { motion } from 'framer-motion';
 import { Sparkles, Sun, Star, Hash, ArrowRight, Moon, Flame, Heart, Gem, Zap, BookOpen, Triangle, Hexagon, Circle, Square } from 'lucide-react';
 import BotanicalDivider from '@/components/shared/BotanicalDivider';
 import { Link } from 'react-router-dom';
-import { base44 } from '@/api/base44Client';
+import { invokeLLM } from '@/api/ai';
 import GlassCard from '@/components/shared/GlassCard';
 import LoadingSpinner from '@/components/shared/LoadingSpinner';
 import { calculateDailyNumber } from '@/lib/numerologyUtils';
@@ -14,6 +14,7 @@ import AltarTarotCard from '@/components/dashboard/AltarTarotCard';
 import OmenCard from '@/components/dashboard/OmenCard';
 import SongCard from '@/components/dashboard/SongCard';
 import { trackEvent } from '@/lib/analytics';
+import { unwrapAiResult } from '@/lib/aiResult';
 
 const ZODIAC_WHEEL_IMG = 'https://media.base44.com/images/public/69e0a15fb28fbe3a6b439ba3/f0661ff37_generated_image.png';
 
@@ -24,8 +25,45 @@ const QUICK_LINKS = [
   { path: '/pendulum', label: 'Pendulum', icon: Gem },
   { path: '/altar', label: 'Altar', icon: Flame },
   { path: '/numerology', label: 'Numbers', icon: Hash },
-  { path: '/downloads', label: 'Messages', icon: Zap },
+  { path: '/channeled', label: 'Messages', icon: Zap },
 ];
+
+function getCosmicFallback(dailyNumber) {
+  return {
+    daily_affirmation: "I am exactly where I need to be, and I trust what's unfolding.",
+    cosmic_overview: "Today's energy asks you to slow down and check in with yourself. You've been giving a lot. Make sure you're also receiving.",
+    crystal: { name: "Rose Quartz", property: "Opens the heart to self-compassion and gentle healing", chakra: "Heart", element: "Water" },
+    spell: { name: "Self-Love Mirror Spell", intent: "To see yourself through kinder eyes", instruction: "Stand before a mirror, place a hand on your heart, and say 'I choose me today' three times." },
+    tarot: { name: "The Star", number: 17, theme: "Hope", keyword: "Renewal", message: "Healing is happening, even when you can't see it." },
+    oracle: { name: "The Still Point", deck: "Lunar Oracle", message: "Pause. The answer you're looking for is in the silence." },
+    numerology: { number: dailyNumber, name: "The Seeker", meaning: "A day for asking questions and staying curious", energy: "Today invites you to explore rather than conclude." },
+    sacred_geometry: { name: "Flower of Life", meaning: "Interconnectedness of all living things", shape: "circle" },
+    astro_energy: "Channel today's tension into clarity about what - and who - is actually worth your energy.",
+    color_of_day: "Soft Pink",
+    color_message: "Today is for being gentle with yourself.",
+    visual_omen: { sign: "a white feather", message: "When you spot it, take it as confirmation that you're being looked after today." },
+    song: { title: "Landslide", artist: "Fleetwood Mac", why: "Today's energy is about accepting change gently - let this one find you." },
+  };
+}
+
+function mergeCosmicData(result, dailyNumber) {
+  const fallback = getCosmicFallback(dailyNumber);
+  const payload = unwrapAiResult(result);
+  const data = payload && typeof payload === 'object' && !Array.isArray(payload) ? payload : {};
+
+  return {
+    ...fallback,
+    ...data,
+    crystal: { ...fallback.crystal, ...(data.crystal || {}) },
+    spell: { ...fallback.spell, ...(data.spell || {}) },
+    tarot: { ...fallback.tarot, ...(data.tarot || {}) },
+    oracle: { ...fallback.oracle, ...(data.oracle || {}) },
+    numerology: { ...fallback.numerology, ...(data.numerology || {}) },
+    sacred_geometry: { ...fallback.sacred_geometry, ...(data.sacred_geometry || {}) },
+    visual_omen: { ...fallback.visual_omen, ...(data.visual_omen || {}) },
+    song: { ...fallback.song, ...(data.song || {}) },
+  };
+}
 
 export default function Dashboard() {
   const [cosmicData, setCosmicData] = useState(null);
@@ -37,122 +75,42 @@ export default function Dashboard() {
   const moonPhase = moonPhases[Math.floor((today.getDate() % 29.5) / 3.69)];
 
   // Use LOCAL date for cache key — toISOString gives UTC, which can roll over before midnight
-  const CACHE_VERSION = 'v4';
+  const CACHE_VERSION = 'v6';
   const dateKey = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
   const cacheKey = `cosmic_${dateKey}_${CACHE_VERSION}`;
 
   useEffect(() => {
     async function fetchCosmic() {
+      const fallback = getCosmicFallback(dailyNumber);
+
       // Check if we already have today's data cached
       const cached = sessionStorage.getItem(cacheKey);
       if (cached) {
-        setCosmicData(JSON.parse(cached));
+        setCosmicData(mergeCosmicData(JSON.parse(cached), dailyNumber));
         setLoading(false);
         return;
       }
 
+      // Show the authored Room immediately. The AI/backend layer can enhance
+      // it, but the homepage must never look like a dead loading frame.
+      setCosmicData(fallback);
+      setLoading(false);
+
       try {
-        const result = await base44.integrations.Core.InvokeLLM({
-          prompt: `You are a Compassionate Truth-Teller — a warm, direct intuitive advisor who is the friend everyone needs. Create today's "Daily Cosmic Altar" for ${today.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}.
-
-Voice: Direct but warm. Short sentences. Second person ("You"). Honest about challenges but always pivoting to growth, self-love, and what the user can do for themselves today.
-
-IMPORTANT: Today's date is ${dateKey}. Generate content that is UNIQUE and SPECIFIC to this date. All content must vary meaningfully from day to day.
-
-Provide a daily ritual dashboard with these sections:
-1. daily_affirmation: One powerful, warm affirmation for the day (first person "I")
-2. cosmic_overview: A direct but empowering daily energy overview (2-3 sentences)
-3. crystal: An object with name (a SPECIFIC crystal matching today's energy), property (1-2 sentences on how it supports emotional wellbeing), chakra (which chakra it activates), element (earth/air/fire/water/spirit)
-4. spell: An object with name (a simple self-love or healing spell), intent (one sentence on what it's for), instruction (2-3 steps, simple and practical)
-5. tarot: An object with name (one Major Arcana card), number (the card's number 0-21), theme (one word), keyword (one word), message (one compassionate sentence)
-6. oracle: An object with name (an oracle card name), deck (name of a fictional oracle deck), message (one sentence of guidance)
-7. numerology: An object with number (today's universal number ${dailyNumber}), name (e.g., "The Seeker"), meaning (one sentence), energy (one sentence on today's numerological invitation)
-8. sacred_geometry: An object with name (e.g., "Flower of Life", "Merkaba", "Sri Yantra"), meaning (one sentence), shape (one of: circle, triangle, square, hexagon)
-9. astro_energy: Today's astrological energy — practical and supportive, not vague
-10. color_of_day: A SPECIFIC color matching today's energy + 1 sentence on what it carries
-11. visual_omen: An object with sign (ONE simple, COMMON everyday sign that anyone, anywhere, could realistically encounter today — e.g. "a white feather", "the number 7 anywhere", "a butterfly or moth", "someone wearing purple", "hearing a song from your childhood") and message (one sentence on what seeing it confirms). CRITICAL: the sign must be general and EASY to actually confirm — never a hyper-specific scenario with exact times, exact places, or multi-part conditions.
-12. song: An object with title and artist (a REAL, well-known song that matches today's energy) and why (one sentence on why it's today's frequency)`,
-          response_json_schema: {
-            type: "object",
-            properties: {
-              daily_affirmation: { type: "string" },
-              cosmic_overview: { type: "string" },
-              crystal: {
-                type: "object",
-                properties: {
-                  name: { type: "string" },
-                  property: { type: "string" },
-                  chakra: { type: "string" },
-                  element: { type: "string" }
-                }
-              },
-              spell: {
-                type: "object",
-                properties: {
-                  name: { type: "string" },
-                  intent: { type: "string" },
-                  instruction: { type: "string" }
-                }
-              },
-              tarot: {
-                type: "object",
-                properties: {
-                  name: { type: "string" },
-                  number: { type: "number" },
-                  theme: { type: "string" },
-                  keyword: { type: "string" },
-                  message: { type: "string" }
-                }
-              },
-              oracle: {
-                type: "object",
-                properties: {
-                  name: { type: "string" },
-                  deck: { type: "string" },
-                  message: { type: "string" }
-                }
-              },
-              numerology: {
-                type: "object",
-                properties: {
-                  number: { type: "number" },
-                  name: { type: "string" },
-                  meaning: { type: "string" },
-                  energy: { type: "string" }
-                }
-              },
-              sacred_geometry: {
-                type: "object",
-                properties: {
-                  name: { type: "string" },
-                  meaning: { type: "string" },
-                  shape: { type: "string" }
-                }
-              },
-              astro_energy: { type: "string" },
-              color_of_day: { type: "string" },
-              color_message: { type: "string" },
-              visual_omen: {
-                type: "object",
-                properties: {
-                  sign: { type: "string" },
-                  message: { type: "string" }
-                }
-              },
-              song: {
-                type: "object",
-                properties: {
-                  title: { type: "string" },
-                  artist: { type: "string" },
-                  why: { type: "string" }
-                }
-              },
+        const result = await Promise.race([
+          invokeLLM({
+            action: 'daily_cosmic_altar',
+            params: {
+              dateLabel: today.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }),
+              dateKey,
+              dailyNumber,
             },
-            required: ["daily_affirmation", "cosmic_overview", "crystal", "spell", "tarot", "oracle", "numerology", "sacred_geometry", "astro_energy", "visual_omen", "song"]
-          }
-        });
-        sessionStorage.setItem(cacheKey, JSON.stringify(result));
-        setCosmicData(result);
+          }),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('Daily room backend timed out')), 8000)),
+        ]);
+        const merged = mergeCosmicData(result, dailyNumber);
+        sessionStorage.setItem(cacheKey, JSON.stringify(merged));
+        setCosmicData(merged);
       } catch {
         setCosmicData({
           daily_affirmation: "I am exactly where I need to be, and I trust what's unfolding.",

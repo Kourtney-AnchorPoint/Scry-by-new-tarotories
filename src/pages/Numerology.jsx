@@ -2,7 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Hash, ArrowRight, Save, Check, Crown, Lock } from 'lucide-react';
 import ListenButton from '@/components/shared/ListenButton';
-import { base44 } from '@/api/base44Client';
+import { invokeLLM } from '@/api/ai';
+import { Reading } from '@/api/entities';
+import { auth } from '@/api/auth';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -68,39 +70,39 @@ export default function Numerology() {
       expressionMeaning: LIFE_PATH_MEANINGS[expressionNum],
     });
 
-    await saveOrUpdate({ birth_date: birthDate, full_name: fullName, life_path_number: lifePathNum });
+    try {
+      if (await auth.isAuthenticated()) {
+        await saveOrUpdate({ birth_date: birthDate, full_name: fullName, life_path_number: lifePathNum });
+      }
+    } catch {
+      // Numerology should still work as a free preview even if profile saving is unavailable.
+    }
     trackEvent('numerology_calculated', { life_path: lifePathNum, is_premium: isPremium });
 
     setLoading(true);
-    const result = await base44.integrations.Core.InvokeLLM({
-      prompt: `You are a Compassionate Truth-Teller numerologist who speaks from lived experience. You've studied these numbers not just academically but through your own life's journey. Share that warmth and relatability — phrases like "I've seen this Life Path number show up in people who..." or "I remember when someone with your same numbers realized..." make the wisdom land in the heart, not just the head.
-
-Voice: Direct but warm. Second person ("You"). Always connect numbers to real growth and self-love. End with a closing message that reminds them: you are doing the best you can with what you have.
-
-Provide a personalized reading for:
-- Life Path Number: ${lifePathNum} (${LIFE_PATH_MEANINGS[lifePathNum]?.title})
-- Expression Number: ${expressionNum || 'unknown'}
-- Soul Urge Number (what their heart secretly craves): ${soulUrgeNum || 'unknown'}
-- Personality Number (the mask they show the world): ${personalityNum || 'unknown'}
-- Birthday Number (their special gift): ${birthdayNum || 'unknown'}
-- Today's Daily Number: ${dailyNumber}
-
-Provide:
-1. How their core numbers interact — especially any tension between their Soul Urge (what they secretly want) and their Personality (what they show the world). What gifts they're carrying AND where they tend to get in their own way (3-4 sentences, specific and kind)
-2. What today's daily number means for their self-care and growth today — one concrete thing it's inviting them to do for themselves (2-3 sentences)
-3. A warm, empowering guidance message for today — sounds like a friend who knows their potential and isn't letting them settle for less`,
-      response_json_schema: {
-        type: "object",
-        properties: {
-          number_interaction: { type: "string" },
-          daily_guidance: { type: "string" },
-          message: { type: "string" },
-        }
-      }
-    });
-
-    setAiInsight(result);
-    setLoading(false);
+    try {
+      const result = await invokeLLM({
+        action: 'numerology_reading',
+        params: {
+          lifePathNum,
+          lifePathTitle: LIFE_PATH_MEANINGS[lifePathNum]?.title,
+          expressionNum,
+          soulUrgeNum,
+          personalityNum,
+          birthdayNum,
+          dailyNumber,
+        },
+      });
+      setAiInsight(result);
+    } catch {
+      setAiInsight({
+        number_interaction: `Your Life Path ${lifePathNum} is the anchor of this reading. It shows the lesson your spirit keeps circling back to, while your other numbers add texture to how you move through people, pressure, and purpose.`,
+        daily_guidance: `Today's universal ${dailyNumber} energy asks you to choose the cleanest next step instead of trying to solve the whole story at once.`,
+        message: 'Let the numbers be a mirror, not a cage. Notice the pattern, then choose with intention.',
+      });
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleGetForecast = async () => {
@@ -108,28 +110,9 @@ Provide:
     if (!birthDate) return;
     const pyNum = calculatePersonalYear(birthDate);
     setLoadingForecast(true);
-    const result = await base44.integrations.Core.InvokeLLM({
-      prompt: `You are a warm, direct numerology guide. 
-Personal Year Number for 2026: ${pyNum}
-Life Path: ${results?.lifePath || 'unknown'}
-Give a 2026 Personal Year Forecast: 
-- What major theme governs this year for them
-- Key months to watch (pick 3)
-- What to let go of entering 2026
-- What to call in / build in 2026
-- One powerful sentence to carry through the year
-Keep it specific, warm, real — not vague platitudes.`,
-      response_json_schema: {
-        type: "object",
-        properties: {
-          personal_year: { type: "number" },
-          theme: { type: "string" },
-          key_months: { type: "string" },
-          release: { type: "string" },
-          build: { type: "string" },
-          power_sentence: { type: "string" },
-        }
-      }
+    const result = await invokeLLM({
+      action: 'numerology_forecast',
+      params: { personalYearNum: pyNum, lifePathNum: results?.lifePath },
     });
     setPersonalYearInsight({ ...result, personal_year: pyNum });
     setLoadingForecast(false);
@@ -138,16 +121,23 @@ Keep it specific, warm, real — not vague platitudes.`,
 
   const handleSave = async () => {
     if (saved || saving || !aiInsight || !results) return;
+    if (!(await auth.isAuthenticated())) {
+      auth.redirectToLogin(window.location.pathname);
+      return;
+    }
     setSaving(true);
-    await base44.entities.Reading.create({
-      type: 'numerology',
-      title: `Life Path ${results.lifePath} Reading`,
-      reading_text: `${aiInsight.number_interaction}\n\n${aiInsight.daily_guidance}\n\n${aiInsight.message}`,
-      summary: aiInsight.message?.slice(0, 120),
-    });
-    setSaving(false);
-    setSaved(true);
-    trackEvent('reading_saved', { type: 'numerology', life_path: results.lifePath });
+    try {
+      await Reading.create({
+        type: 'numerology',
+        title: `Life Path ${results.lifePath} Reading`,
+        reading_text: `${aiInsight.number_interaction}\n\n${aiInsight.daily_guidance}\n\n${aiInsight.message}`,
+        summary: aiInsight.message?.slice(0, 120),
+      });
+      setSaved(true);
+      trackEvent('reading_saved', { type: 'numerology', life_path: results.lifePath });
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (

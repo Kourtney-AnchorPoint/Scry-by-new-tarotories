@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { Trash2, AlertTriangle, LogOut, LayoutDashboard, Crown, Check, User, Save, Star, Bell } from 'lucide-react';
 import NotificationSettings from '@/components/shared/NotificationSettings';
-import { base44 } from '@/api/base44Client';
+import { auth } from '@/api/auth';
+import { Reading, UserProfile } from '@/api/entities';
+import { stripe } from '@/api/functions/stripe';
 import { Link, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -17,6 +19,7 @@ import {
 import SectionHeader from '@/components/shared/SectionHeader';
 import GlassCard from '@/components/shared/GlassCard';
 import { useUserProfile } from '@/hooks/useUserProfile';
+import { BirthLocationDatalist, normalizeBirthLocation } from '@/lib/birthLocations';
 
 export default function Account() {
   const navigate = useNavigate();
@@ -30,8 +33,9 @@ export default function Account() {
   const handleManageSubscription = async () => {
     setOpeningPortal(true);
     try {
-      const res = await base44.functions.invoke('createPortalSession', {
+      const res = await stripe.createPortalSession({
         return_url: window.location.origin + '/account',
+        user_email: user?.email,
       });
       if (res.data?.url) window.location.href = res.data.url;
     } catch {
@@ -68,8 +72,9 @@ export default function Account() {
 
   const handleSaveProfile = async () => {
     setSaving(true);
-    const locationParts = [birthCity, birthState, birthCountry].filter(Boolean);
-    const birth_location = locationParts.join(', ');
+    const birth_location = birthCity.includes(',')
+      ? normalizeBirthLocation(birthCity)
+      : normalizeBirthLocation([birthCity, birthState, birthCountry].filter(Boolean).join(', '));
     await saveOrUpdate({ birth_date: birthDate, birth_time: unknownBirthTime ? 'unknown' : birthTime, birth_location, display_name: displayName });
     setSaving(false);
     setSaved(true);
@@ -83,13 +88,13 @@ export default function Account() {
 
   const handleDeleteAccount = async () => {
     setDeleting(true);
-    const readings = await base44.entities.Reading.list('-created_date', 100);
-    await Promise.all(readings.map(r => base44.entities.Reading.delete(r.id)));
-    const profiles = await base44.entities.UserProfile.list();
-    await Promise.all(profiles.map(p => base44.entities.UserProfile.delete(p.id)));
+    const readings = await Reading.list('-created_date', 100);
+    await Promise.all(readings.map(r => Reading.delete(r.id)));
+    const profiles = await UserProfile.list();
+    await Promise.all(profiles.map(p => UserProfile.delete(p.id)));
     setDeleting(false);
     setShowDeleteDialog(false);
-    base44.auth.logout('/');
+    await auth.logout('/');
   };
 
   return (
@@ -195,9 +200,14 @@ export default function Account() {
               <Input
                 value={birthCity}
                 onChange={e => setBirthCity(e.target.value)}
-                placeholder="e.g. Chicago"
+                list="account-birth-location-options"
+                placeholder="e.g. Oklahoma City, Oklahoma, United States"
                 className="bg-background/50 border-border/50 text-base"
               />
+              <BirthLocationDatalist id="account-birth-location-options" />
+              <p className="text-xs text-muted-foreground/70 mt-1.5 leading-relaxed">
+                You can pick a full birthplace here, or fill city/state/country below.
+              </p>
             </div>
             <div>
               <Label className="text-sm text-muted-foreground mb-1.5 block">Birth State / Province</Label>
@@ -262,7 +272,7 @@ export default function Account() {
       <Button
         variant="outline"
         className="w-full gap-2 text-base border-border/50 text-muted-foreground hover:text-foreground hover:border-violet/40 select-none"
-        onClick={() => base44.auth.logout('/')}
+        onClick={() => auth.logout('/')}
       >
         <LogOut className="w-5 h-5" />
         Sign Out

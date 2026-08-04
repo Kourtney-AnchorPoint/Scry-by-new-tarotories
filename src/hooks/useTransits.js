@@ -1,24 +1,6 @@
 import { useState, useEffect } from 'react';
-import { base44 } from '@/api/base44Client';
-
-const PHASES_SCHEMA = {
-  type: "object",
-  properties: {
-    phases: {
-      type: "array",
-      items: {
-        type: "object",
-        properties: {
-          index: { type: "number" },
-          name: { type: "string" },
-          meaning: { type: "string" }
-        },
-        required: ["index", "name", "meaning"]
-      }
-    }
-  },
-  required: ["phases"]
-};
+import { astronomy } from '@/api/functions/astronomy';
+import { invokeLLM } from '@/api/ai';
 
 // Jargon-free fallback title if the AI narration fails — never show raw planet names
 const DOMAIN = {
@@ -56,7 +38,7 @@ export function useTransits(profile) {
     setError(null);
     try {
       // Real transit math from today's actual sky vs. the natal chart
-      const res = await base44.functions.invoke('calculateTransits', {
+      const res = await astronomy.calculateTransits({
         birth_date: profile.birth_date,
         birth_time: profile.birth_time || 'unknown',
         birth_location: profile.birth_location,
@@ -74,25 +56,9 @@ export function useTransits(profile) {
           .map(h => `Transiting ${h.planet} is moving through their natal House ${h.house} (in ${h.sign})`)
           .join('\n');
 
-        const result = await base44.integrations.Core.InvokeLLM({
-          prompt: `You are a deeply psychological astrologer in the style of "The Pattern" app. Direct, raw, second person. No jargon in the output — translate everything into plain emotional language.
-
-These are the REAL transits active in this person's chart RIGHT NOW (computed from live ephemeris data, today's date: ${t.date}):
-${transitList}
-
-Current house journeys for context (weave in where relevant):
-${houseList || 'not available'}
-
-For EACH numbered transit, return:
-- "index": the transit's number from the list
-- "name": a plain-English phase name, like The Pattern uses — e.g. "Identity Earthquake", "Relationship Testing Period", "Money Rebuild", "Finding Your Voice". NO planet names in the phase name.
-- "meaning": 2 paragraphs. First: what this actually FEELS like right now — the internal experience, the friction, the urges, the restlessness or stuckness. Second: what it's here to teach and what to actively do (or stop doing) while it lasts. If applying, note the pressure is still building; if separating, note the peak has passed and this is integration time. Be specific and piercing — no horoscope fluff.
-
-ABSOLUTE RULE: Never use planet names, sign names, aspect names (square, trine, conjunction, etc.), the word "transit", or any astrology terminology ANYWHERE in the name or meaning. Write only about the human experience — as if you know exactly what is happening inside this person.
-
-Return one entry per numbered transit, in order.`,
-          response_json_schema: PHASES_SCHEMA,
-          model: "claude_sonnet_4_6"
+        const result = await invokeLLM({
+          action: 'astrology_transits',
+          params: { transitList, houseList, date: t.date },
         });
 
         phases = t.transits.map((tr, i) => {

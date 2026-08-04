@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Sparkles, ChevronDown, ChevronUp, Trash2, RotateCcw } from 'lucide-react';
-import { base44 } from '@/api/base44Client';
+import { Reading } from '@/api/entities';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -137,14 +137,13 @@ export default function TarotHistory() {
   const { data: readings, isLoading } = useQuery({
     queryKey: ['tarotReadings'],
     queryFn: async () => {
-      const me = await base44.auth.me();
-      return base44.entities.Reading.filter({ type: 'tarot', created_by: me.email }, '-created_date', 50);
+      return Reading.filter({ type: 'tarot' }, '-created_date', 50);
     },
     initialData: [],
   });
 
   const deleteMutation = useMutation({
-    mutationFn: (id) => base44.entities.Reading.delete(id),
+    mutationFn: (id) => Reading.delete(id),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['tarotReadings'] }),
   });
 

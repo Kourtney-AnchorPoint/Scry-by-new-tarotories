@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
 import { Share2, Check, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { base44 } from '@/api/base44Client';
+import { SharedReading } from '@/api/entities';
+import { trackEvent } from '@/lib/analytics';
 import { useUserProfile } from '@/hooks/useUserProfile';
+import { auth } from '@/api/auth';
 
 export default function ShareBondButton({ connection, report, userChartData, connectionChartData }) {
   const { profile, user } = useUserProfile();
@@ -17,11 +19,15 @@ export default function ShareBondButton({ connection, report, userChartData, con
   });
 
   const handleShare = async () => {
+    if (!auth.isAuthenticated()) {
+      auth.redirectToLogin(window.location.pathname);
+      return;
+    }
     setSharing(true);
     setShareError(false);
     try {
       const inviterName = profile?.display_name || user?.full_name || 'Someone special';
-      const record = await base44.entities.SharedReading.create({
+      const record = await SharedReading.create({
         title: `${inviterName} & ${connection.name}`,
         inviter_name: inviterName,
         connection_name: connection.name,
@@ -30,7 +36,7 @@ export default function ShareBondButton({ connection, report, userChartData, con
         connection_big_three: bigThree(connectionChartData),
       });
       const url = `${window.location.origin}/shared/${record.id}`;
-      base44.analytics.track({ eventName: 'synastry_share', properties: { bond_tier: report.bond_tier } });
+      trackEvent('synastry_share', { bond_tier: report.bond_tier });
       if (navigator.share) {
         try {
           await navigator.share({

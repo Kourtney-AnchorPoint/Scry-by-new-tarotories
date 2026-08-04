@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Sparkles, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { base44 } from '@/api/base44Client';
+import { invokeLLM } from '@/api/ai';
 import { ORACLE_CARDS } from '@/lib/tarotData';
 
 export default function OraclePull({ readingContext }) {
@@ -16,20 +16,13 @@ export default function OraclePull({ readingContext }) {
     const card = ORACLE_CARDS[Math.floor(Math.random() * ORACLE_CARDS.length)];
 
     try {
-      const result = await base44.integrations.Core.InvokeLLM({
-        prompt: `The user just completed a tarot reading. The core message was: "${readingContext}".
-
-An oracle card was drawn: ${card.name}.
-Keywords: ${card.keywords?.join(', ')}
-Meaning: ${card.meaning}
-
-In 2-3 sentences, connect this oracle card's energy directly to the tarot reading above. How does this oracle message deepen or clarify what the cards already said? Write in second person ("you"), warm and direct.`,
-        response_json_schema: {
-          type: 'object',
-          properties: {
-            connection: { type: 'string' },
-          },
-          required: ['connection'],
+      const result = await invokeLLM({
+        action: 'oracle_clarity',
+        params: {
+          readingContext,
+          cardName: card.name,
+          keywords: card.keywords?.join(', ') || '',
+          meaning: card.meaning,
         },
       });
 

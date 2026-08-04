@@ -1,6 +1,7 @@
 import React from 'react';
 import { motion } from 'framer-motion';
 import { Music } from 'lucide-react';
+import MusicLinks from '@/components/shared/MusicLinks';
 
 export default function SongCard({ song, delay = 0 }) {
   if (!song) return null;
@@ -18,6 +19,7 @@ export default function SongCard({ song, delay = 0 }) {
       <p className="text-base font-semibold text-foreground mb-0.5">{song.title}</p>
       <p className="text-xs text-muted-foreground mb-2">{song.artist}</p>
       <p className="text-xs text-foreground leading-relaxed italic">{song.why}</p>
+      <MusicLinks song={song} className="mt-3" />
     </motion.div>
   );
 }

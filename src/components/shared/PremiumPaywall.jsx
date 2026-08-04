@@ -9,7 +9,7 @@ export default function PremiumPaywall({ isOpen, onClose, title = "Unlock Premiu
   if (!isOpen) return null;
 
   const perks = [
-    { icon: Zap, text: "Unlimited Channeled Downloads" },
+    { icon: Zap, text: "Unlimited Channeled Messages" },
     { icon: Crown, text: "Higher Self & Spirit Guide channels" },
     { icon: Heart, text: "Deep-dive Love spreads (Twin Flame, Shadow Work)" },
     { icon: Sparkles, text: "2026 Personal Year Forecast & Digital Altar" },
@@ -70,7 +70,7 @@ export default function PremiumPaywall({ isOpen, onClose, title = "Unlock Premiu
               <Link to="/premium" onClick={onClose}>
                 <Button className="w-full bg-gradient-to-r from-violet to-gold text-white hover:opacity-90 gap-2 py-5 text-base rounded-xl">
                   <Crown className="w-4 h-4" />
-                  Get Unlimited Downloads — $9.99/mo
+                  Get Unlimited Messages — $9.99/mo
                 </Button>
               </Link>
               <p className="text-xs text-muted-foreground/50 text-center mt-3">Cancel anytime. No pressure.</p>

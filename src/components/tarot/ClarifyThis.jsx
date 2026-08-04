@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Search, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { base44 } from '@/api/base44Client';
+import { invokeLLM } from '@/api/ai';
 import { MAJOR_ARCANA } from '@/lib/tarotData';
 
 export default function ClarifyThis({ drawnCards, spreadPositions }) {
@@ -21,22 +21,16 @@ export default function ClarifyThis({ drawnCards, spreadPositions }) {
       `${spreadPositions[i] || 'Card'}: ${c.name}${c.isReversed ? ' (Reversed)' : ''}`
     ).join(', ');
 
-    const result = await base44.integrations.Core.InvokeLLM({
-      prompt: `A tarot reading was done with these cards: ${originalCards}.
-
-A clarifying card was drawn: ${clarifier.name}${clarifier.isReversed ? ' (Reversed)' : ''}.
-
-In 2-3 sentences, explain the direct connection between the clarifying card and the original reading. How does this card shed light on or reframe what came before? Be specific and direct. Write in second person ("you").`,
-      response_json_schema: {
-        type: 'object',
-        properties: {
-          connection: { type: 'string' },
-        }
-      }
+    const result = await invokeLLM({
+      action: 'tarot_clarifier',
+      params: {
+        originalCards,
+        clarifierName: clarifier.name,
+        isReversed: clarifier.isReversed,
+      },
     });
 
-    const response = result?.response ? result.response : result;
-    setClarifiers(prev => [...prev, { ...clarifier, interpretation: response.connection }]);
+    setClarifiers(prev => [...prev, { ...clarifier, interpretation: result.connection }]);
     setLoading(false);
   };
 

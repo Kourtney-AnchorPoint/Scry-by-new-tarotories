@@ -1,7 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { Headphones, Square, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { base44 } from '@/api/base44Client';
+import { generateSpeech } from '@/api/speech';
 
 // Strip URLs and other potential SSRF vectors from text before sending to TTS
 function sanitizeText(input) {
@@ -33,7 +33,7 @@ export default function ListenButton({ text, isPremium }) {
 
     setState('loading');
     try {
-      const result = await base44.integrations.Core.GenerateSpeech({
+      const result = await generateSpeech({
         text: sanitized,
         voice: 'honey', // warm, soft — perfect for readings
       });
@@ -69,7 +69,7 @@ export default function ListenButton({ text, isPremium }) {
       ) : (
         <Headphones className="w-3 h-3" />
       )}
-      {state === 'loading' ? 'Loading...' : state === 'playing' ? 'Stop' : '🎧 Listen'}
+      {state === 'loading' ? 'Loading...' : state === 'playing' ? 'Stop' : 'Listen'}
     </Button>
   );
 }

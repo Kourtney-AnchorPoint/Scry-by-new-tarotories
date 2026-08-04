@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { BarChart3, Users, Crown, Sparkles, CalendarDays, Lock } from 'lucide-react';
-import { base44 } from '@/api/base44Client';
+import { BarChart3, Users, Crown, Sparkles, CalendarDays, Lock, ShieldCheck } from 'lucide-react';
+import { auth } from '@/api/auth';
+import { User, Reading, JournalEntry, UserProfile, AppEvent } from '@/api/entities';
 import SectionHeader from '@/components/shared/SectionHeader';
 import LoadingSpinner from '@/components/shared/LoadingSpinner';
 import ActivityFeed from '@/components/insights/ActivityFeed';
@@ -10,21 +11,21 @@ import EventPulse from '@/components/insights/EventPulse';
 export default function Insights() {
   const [state, setState] = useState({ loading: true, denied: false });
   const [data, setData] = useState(null);
+  const [savingPremiumId, setSavingPremiumId] = useState(null);
 
-  useEffect(() => {
-    async function load() {
+  async function loadInsights() {
       let me;
-      try { me = await base44.auth.me(); } catch { me = null; }
+      try { me = await auth.me(); } catch { me = null; }
       if (!me || me.role !== 'admin') {
         setState({ loading: false, denied: true });
         return;
       }
       const [users, readings, journals, profiles, events] = await Promise.all([
-        base44.entities.User.list('-created_date', 200),
-        base44.entities.Reading.list('-created_date', 200),
-        base44.entities.JournalEntry.list('-created_date', 100),
-        base44.entities.UserProfile.list('-created_date', 200),
-        base44.entities.AppEvent.list('-created_date', 1000).catch(() => []),
+        User.list('-created_date', 200),
+        Reading.list('-created_date', 200),
+        JournalEntry.list('-created_date', 100),
+        UserProfile.list('-created_date', 200),
+        AppEvent.list('-created_date', 1000).catch(() => []),
       ]);
 
       const userMap = {};
@@ -42,11 +43,23 @@ export default function Insights() {
         ...journals.map(j => ({ id: j.id, type: 'journal', title: j.title || 'Journal entry', created_date: j.created_date, created_by_id: j.created_by_id })),
       ].sort((a, b) => new Date(b.created_date) - new Date(a.created_date)).slice(0, 40);
 
-      setData({ users, userMap, readings, readingsThisWeek, premiumCount, byType, feed, events });
+      setData({ users, userMap, readings, readingsThisWeek, premiumCount, byType, feed, events, profiles });
       setState({ loading: false, denied: false });
-    }
-    load();
+  }
+
+  useEffect(() => {
+    loadInsights();
   }, []);
+
+  async function setPremium(profile, isPremium) {
+    setSavingPremiumId(profile.id);
+    try {
+      await UserProfile.update(profile.id, { is_premium: isPremium });
+      await loadInsights();
+    } finally {
+      setSavingPremiumId(null);
+    }
+  }
 
   if (state.loading) {
     return <div className="max-w-3xl mx-auto px-4 py-12"><LoadingSpinner message="Gathering the records..." /></div>;
@@ -88,6 +101,44 @@ export default function Insights() {
       </div>
 
       <EventPulse events={data.events} />
+
+      <div className="glass-card rounded-2xl p-5 mb-6">
+        <div className="flex items-center gap-2 mb-4">
+          <ShieldCheck className="w-5 h-5 text-gold" />
+          <h3 className="font-heading text-sm font-semibold text-gold uppercase tracking-wider">Premium Access</h3>
+        </div>
+        <div className="space-y-3">
+          {data.profiles.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No profiles yet.</p>
+          ) : data.profiles.map((profile) => (
+            <div key={profile.id} className="flex flex-col gap-3 rounded-xl border border-border/40 bg-secondary/20 p-4 sm:flex-row sm:items-center sm:justify-between">
+              <div className="min-w-0">
+                <p className="text-sm font-semibold text-foreground truncate">
+                  {profile.display_name || profile.full_name || profile.email || 'Unnamed user'}
+                </p>
+                <p className="text-xs text-muted-foreground truncate">{profile.email || 'No email on profile'}</p>
+                <p className={`mt-1 text-xs ${profile.is_premium ? 'text-gold' : 'text-muted-foreground'}`}>
+                  {profile.is_premium ? 'Premium active' : 'Free account'}
+                  {profile.stripe_customer_id ? ' via Stripe' : profile.is_premium ? ' manual grant' : ''}
+                </p>
+              </div>
+              <button
+                onClick={() => setPremium(profile, !profile.is_premium)}
+                disabled={savingPremiumId === profile.id}
+                className={`inline-flex items-center justify-center rounded-xl px-4 py-2 text-xs font-semibold transition-colors ${
+                  profile.is_premium
+                    ? 'border border-border/50 text-muted-foreground hover:bg-secondary/50'
+                    : 'border border-gold/40 bg-gold/10 text-gold hover:bg-gold/15'
+                }`}
+              >
+                {savingPremiumId === profile.id
+                  ? 'Saving...'
+                  : profile.is_premium ? 'Revoke Premium' : 'Grant Premium'}
+              </button>
+            </div>
+          ))}
+        </div>
+      </div>
 
       {Object.keys(data.byType).length > 0 && (
         <div className="glass-card rounded-2xl p-5 mb-6">

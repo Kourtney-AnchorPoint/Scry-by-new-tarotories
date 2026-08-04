@@ -2,7 +2,7 @@ import React, { useState, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { X, Upload, Image as ImageIcon, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { base44 } from '@/api/base44Client';
+import { uploadFile } from '@/api/storage';
 
 export default function UploadCardModal({ onClose, onSave }) {
   const [file, setFile] = useState(null);
@@ -27,7 +27,7 @@ export default function UploadCardModal({ onClose, onSave }) {
     setUploading(true);
     setError(null);
     try {
-      const { file_url } = await base44.integrations.Core.UploadFile({ file });
+      const { file_url } = await uploadFile({ file });
       await onSave({
         card_name: cardName.trim(),
         card_image_url: file_url,

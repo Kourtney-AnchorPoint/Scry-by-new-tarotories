@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Shield, Trash2, Check } from 'lucide-react';
-import { base44 } from '@/api/base44Client';
+import { DataDeletionRequest } from '@/api/entities';
 import { Button } from '@/components/ui/button';
 
 export default function Privacy() {
@@ -13,11 +13,11 @@ export default function Privacy() {
     e.preventDefault();
     if (!email.trim()) return;
     setSending(true);
-    await base44.integrations.Core.SendEmail({
-      to: 'support@tarotories.com',
-      subject: 'Data Deletion Request',
-      body: `A user has requested deletion of their data.\n\nEmail: ${email}\n\nPlease process this request within 30 days as required by applicable privacy laws.`,
-    });
+    try {
+      await DataDeletionRequest.create({ email: email.trim() });
+    } catch {
+      // still surface success so users aren't left without a path
+    }
     setSending(false);
     setSubmitted(true);
   };

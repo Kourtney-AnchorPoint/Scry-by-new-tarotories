@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { Heart, RotateCcw, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { base44 } from '@/api/base44Client';
+import { invokeLLM } from '@/api/ai';
 import ShareBondButton from '@/components/astrology/ShareBondButton';
 
 const TIER_COLORS = {
@@ -31,62 +31,24 @@ export default function SynastryReport({ userChartData, connection, connectionCh
       const bt2 = connectionChartData.big_three || {};
       const pl2 = connectionChartData.planets || {};
 
-      const p1 = `Sun: ${bt1.sun?.sign || 'Unknown'}
-Moon: ${bt1.moon?.sign || 'Unknown'}
-Rising: ${bt1.rising?.sign || 'Unknown'}
-Venus: ${pl1.venus?.sign || 'Unknown'}
-Mars: ${pl1.mars?.sign || 'Unknown'}`;
-
-      const p2 = `Sun: ${bt2.sun?.sign || 'Unknown'}
-Moon: ${bt2.moon?.sign || 'Unknown'}
-Rising: ${bt2.rising?.sign || 'Unknown'}
-Venus: ${pl2.venus?.sign || 'Unknown'}
-Mars: ${pl2.mars?.sign || 'Unknown'}`;
-
-      const result = await base44.integrations.Core.InvokeLLM({
-        prompt: `You are a deeply psychological relationship astrologer in the style of "The Pattern" app. You speak in first person, direct, raw, and piercing. No jargon. No "the cosmos whispers." You read energy like you're seeing someone's soul.
-
-Person 1 (User):
-${p1}
-
-Person 2 (${connection.name}):
-${p2}
-
-Analyze the synastry between these two charts and classify this bond into exactly one tier:
-- Soulmate: rare, multi-faceted harmony with depth
-- Extraordinary: strong mutual activation with growth potential
-- Powerful: intense dynamic, transformative
-- Meaningful: real connection with some work needed
-- Complex: intense but challenging
-- Delicate: subtle, requires care
-- Chilly: distant, minimal resonance
-
-Then write three sections:
-
-1. "The Chemistry" — Initial attraction, physical/mental sparks, immediate mirrors. What draws them together. What feels effortless. 3-4 sentences.
-
-2. "The Frictions" — Where ego clashes, emotional misunderstandings, or communication breakdowns occur. What growth demands of them. 3-4 sentences.
-
-3. "The Long-Term Potential" — How well the two charts support each other's lifelong evolution. What this relationship is actually about at its deepest level. 3-4 sentences.
-
-Write in a raw, direct, first-person voice. No mystical fluff.`,
-        response_json_schema: {
-          type: "object",
-          properties: {
-            bond_tier: { type: "string", enum: ["Soulmate", "Extraordinary", "Powerful", "Meaningful", "Complex", "Delicate", "Chilly"] },
-            chemistry: { type: "string" },
-            frictions: { type: "string" },
-            long_term_potential: { type: "string" },
-          },
-          required: ["bond_tier", "chemistry", "frictions", "long_term_potential"]
+      const result = await invokeLLM({
+        action: 'synastry_reading',
+        params: {
+          connectionName: connection.name,
+          userBigThree: { sun: bt1.sun?.sign, moon: bt1.moon?.sign, rising: bt1.rising?.sign },
+          userVenus: pl1.venus?.sign,
+          userMars: pl1.mars?.sign,
+          connectionBigThree: { sun: bt2.sun?.sign, moon: bt2.moon?.sign, rising: bt2.rising?.sign },
+          connectionVenus: pl2.venus?.sign,
+          connectionMars: pl2.mars?.sign,
         },
-        model: "claude_sonnet_4_6"
       });
       setReport(result);
     } catch {
       setError('Unable to read the relationship energy right now.');
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   useEffect(() => {

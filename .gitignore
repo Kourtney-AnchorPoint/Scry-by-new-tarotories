@@ -17,6 +17,7 @@ dist
 dist-ssr
 scry-aws-deploy*.zip
 *.local
+live-checks/
 
 # Editor directories and files
 .vscode/*

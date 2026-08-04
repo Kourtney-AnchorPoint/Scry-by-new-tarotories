@@ -5,15 +5,17 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Link } from 'react-router-dom';
 import { useUserProfile } from '@/hooks/useUserProfile';
+import { auth } from '@/api/auth';
+import { BirthLocationDatalist, normalizeBirthLocation } from '@/lib/birthLocations';
 
 export default function BirthDataForm({ compact = false }) {
-  const { profile, isPremium, saveOrUpdate } = useUserProfile();
+  const { profile, saveOrUpdate } = useUserProfile();
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [birthDate, setBirthDate] = useState('');
   const [birthTime, setBirthTime] = useState('');
   const [unknownBirthTime, setUnknownBirthTime] = useState(false);
-  const [birthCity, setBirthCity] = useState('');
+  const [birthLocation, setBirthLocation] = useState('');
   const [birthZip, setBirthZip] = useState('');
 
   useEffect(() => {
@@ -22,25 +24,34 @@ export default function BirthDataForm({ compact = false }) {
       const savedTime = profile.birth_time || '';
       setBirthTime(savedTime === 'unknown' ? '' : savedTime);
       setUnknownBirthTime(savedTime === 'unknown');
-      setBirthCity(profile.birth_location || '');
+      setBirthLocation(profile.birth_location || '');
       setBirthZip(profile.birth_zip || '');
     }
   }, [profile?.id]);
 
   const handleSave = async () => {
+    if (!(await auth.isAuthenticated())) {
+      auth.redirectToLogin(window.location.pathname);
+      return;
+    }
     setSaving(true);
-    await saveOrUpdate({
-      birth_date: birthDate,
-      birth_time: unknownBirthTime ? 'unknown' : birthTime,
-      birth_location: birthCity,
-      birth_zip: birthZip,
-    });
-    setSaving(false);
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2500);
+    try {
+      const normalizedLocation = normalizeBirthLocation(birthLocation);
+      await saveOrUpdate({
+        birth_date: birthDate,
+        birth_time: unknownBirthTime ? 'unknown' : birthTime,
+        birth_location: normalizedLocation,
+        birth_zip: birthZip,
+      });
+      setBirthLocation(normalizedLocation);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2500);
+    } finally {
+      setSaving(false);
+    }
   };
 
-  const hasBirthData = birthDate && (birthTime || unknownBirthTime) && (birthCity || birthZip);
+  const hasBirthData = birthDate && (birthTime || unknownBirthTime) && (birthLocation || birthZip);
 
   return (
     <div className={`space-y-4 ${compact ? '' : 'space-y-5'}`}>
@@ -64,7 +75,7 @@ export default function BirthDataForm({ compact = false }) {
           />
         )}
         <label className="flex items-center gap-2.5 cursor-pointer mt-1">
-            <input
+          <input
             type="checkbox"
             checked={unknownBirthTime}
             onChange={e => {
@@ -81,25 +92,28 @@ export default function BirthDataForm({ compact = false }) {
           </p>
         )}
       </div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <div>
-          <Label className="text-sm text-muted-foreground mb-1.5 block">City</Label>
-          <Input
-            value={birthCity}
-            onChange={e => setBirthCity(e.target.value)}
-            placeholder="e.g. Chicago"
-            className="bg-background/50 border-border/50 text-base"
-          />
-        </div>
-        <div>
-          <Label className="text-sm text-muted-foreground mb-1.5 block">Zip Code</Label>
-          <Input
-            value={birthZip}
-            onChange={e => setBirthZip(e.target.value)}
-            placeholder="e.g. 60601"
-            className="bg-background/50 border-border/50 text-base"
-          />
-        </div>
+      <div>
+        <Label className="text-sm text-muted-foreground mb-1.5 block">Birthplace</Label>
+        <Input
+          value={birthLocation}
+          onChange={e => setBirthLocation(e.target.value)}
+          list="birth-location-options"
+          placeholder="City, state/province, country"
+          className="bg-background/50 border-border/50 text-base"
+        />
+        <BirthLocationDatalist />
+        <p className="text-xs text-muted-foreground/70 mt-1.5 leading-relaxed">
+          Best format: Oklahoma City, Oklahoma, United States. ZIP/postal code is optional and not available everywhere worldwide.
+        </p>
+      </div>
+      <div>
+        <Label className="text-sm text-muted-foreground mb-1.5 block">ZIP / Postal Code <span className="text-muted-foreground/60">(optional)</span></Label>
+        <Input
+          value={birthZip}
+          onChange={e => setBirthZip(e.target.value)}
+          placeholder="Optional — helpful for U.S. births"
+          className="bg-background/50 border-border/50 text-base"
+        />
       </div>
       <Button
         onClick={handleSave}

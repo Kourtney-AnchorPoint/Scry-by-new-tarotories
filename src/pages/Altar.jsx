@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Plus, Flame } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { base44 } from '@/api/base44Client';
+import { AltarCard } from '@/api/entities';
 import AltarCardItem from '@/components/altar/AltarCardItem';
 import UploadCardModal from '@/components/altar/UploadCardModal';
 import LoadingSpinner from '@/components/shared/LoadingSpinner';
@@ -14,16 +14,16 @@ export default function Altar() {
 
   const { data: cards = [], isLoading } = useQuery({
     queryKey: ['altar_cards'],
-    queryFn: () => base44.entities.AltarCard.list('-created_date', 50),
+    queryFn: () => AltarCard.list('-created_date', 50),
   });
 
   const createCard = useMutation({
-    mutationFn: (cardData) => base44.entities.AltarCard.create(cardData),
+    mutationFn: (cardData) => AltarCard.create(cardData),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['altar_cards'] }),
   });
 
   const deleteCard = useMutation({
-    mutationFn: (id) => base44.entities.AltarCard.delete(id),
+    mutationFn: (id) => AltarCard.delete(id),
     onMutate: async (id) => {
       await queryClient.cancelQueries({ queryKey: ['altar_cards'] });
       const previous = queryClient.getQueryData(['altar_cards']);

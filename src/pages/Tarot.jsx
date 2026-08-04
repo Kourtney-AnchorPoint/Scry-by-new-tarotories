@@ -1,7 +1,9 @@
 import React, { useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Sparkles, RotateCcw, BookOpen, History, Save, Share2, Check, Zap } from 'lucide-react';
-import { base44 } from '@/api/base44Client';
+import { Sparkles, RotateCcw, BookOpen, History, Save, Share2, Check } from 'lucide-react';
+import { invokeLLM } from '@/api/ai';
+import { Reading } from '@/api/entities';
+import { auth } from '@/api/auth';
 import { Button } from '@/components/ui/button';
 import SectionHeader from '@/components/shared/SectionHeader';
 import { Link } from 'react-router-dom';
@@ -11,8 +13,8 @@ import DeckSelector from '@/components/tarot/DeckSelector';
 import ReadingCategorySelector from '@/components/tarot/ReadingCategorySelector';
 import TarotCard from '@/components/tarot/TarotCard';
 import LoadingSpinner from '@/components/shared/LoadingSpinner';
-import ClarifyThis from '@/components/tarot/ClarifyThis';
-import OraclePull from '@/components/tarot/OraclePull';
+import ListenButton from '@/components/shared/ListenButton';
+import ShareActions from '@/components/shared/ShareActions';
 import { useUserProfile } from '@/hooks/useUserProfile';
 import ReadingDisclaimer from '@/components/shared/ReadingDisclaimer';
 import { MAJOR_ARCANA, SPREADS } from '@/lib/tarotData';
@@ -33,10 +35,25 @@ export default function Tarot() {
   const [saved, setSaved] = useState(false);
   const [saving, setSaving] = useState(false);
   const [shared, setShared] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
   const [readingError, setReadingError] = useState(null);
 
   const spread = SPREADS[selectedSpread];
   const allFlipped = drawnCards.length > 0 && flippedCount >= drawnCards.length;
+
+  const readingToText = (includeFooter = false) => {
+    if (!reading) return '';
+
+    const text = [
+      reading.opening,
+      reading.synthesis,
+      reading.closing,
+    ].filter(Boolean).join('\n\n');
+
+    if (!includeFooter) return text;
+    const appUrl = typeof window !== 'undefined' ? window.location.origin : 'https://main.d9v72l1if77fe.amplifyapp.com';
+    return `✨ My Tarot Reading: ${spread.name}\n\n${text}\n\n🔮 Get your own reading at ${appUrl}`;
+  };
 
   const handleSpreadSelect = (spreadKey) => {
     setSelectedSpread(spreadKey);
@@ -45,6 +62,7 @@ export default function Tarot() {
     setReading(null);
     setSaved(false);
     setShared(false);
+    setShareOpen(false);
     setFlippedCount(0);
   };
 
@@ -60,6 +78,7 @@ export default function Tarot() {
     setReading(null);
     setSaved(false);
     setShared(false);
+    setShareOpen(false);
     setFlippedCount(0);
 
     const shuffled = [...MAJOR_ARCANA].sort(() => Math.random() - 0.5);
@@ -85,100 +104,33 @@ export default function Tarot() {
     const isChanneled = spread.channeled === true;
     const isSelfLove = spread.selflove === true;
     const isThreeCard = selectedSpread === 'three_card';
-    const cardDescriptions = drawnCards.map((card, i) =>
-      `Position "${spread.positions[i]}": ${card.name}${card.isReversed ? ' (Reversed)' : ''} - ${card.isReversed ? card.reversed : card.meaning}`
-    ).join('\n');
-
-    const channeledInstruction = isChanneled
-      ? `IMPORTANT: Write the synthesis entirely in FIRST PERSON ("I"), as if you are the person of interest speaking directly and honestly to the querent. Be emotionally real and conversational. Always end by bringing the focus back to the querent's own peace and growth — not the other person's drama.`
-      : '';
-
-    const selfLoveInstruction = isSelfLove
-      ? `This is a self-love and healing spread. Make every interpretation warm, empowering, and growth-focused. You are calling them UP, not calling them out. Remind them that self-love is not weakness — it is the foundation of everything.`
-      : '';
-
-    const threeCardInstruction = isThreeCard
-      ? `CRITICAL STRUCTURE RULE: This is the Past / Present / Future spread. You MUST follow this exact structure every single time, no exceptions:
-- card_readings[0] = PAST: What energy, pattern, or experience from the past is shaping this moment. What did it teach them?
-- card_readings[1] = PRESENT: Exactly where they are RIGHT NOW. What is alive, active, and demanding their attention today?
-- card_readings[2] = FUTURE: The direction energy is moving IF they apply the wisdom of the past and present cards. Empowering and specific.
-The synthesis must weave all three timeframes into one cohesive narrative arc: where they've been → where they are → where they're headed.`
-      : '';
 
     try {
-      let result;
-      const awsApiUrl = import.meta.env.VITE_SCRY_API_URL;
-      if (awsApiUrl) {
-        const awsResponse = await fetch(`${awsApiUrl.replace(/\/$/, '')}/readings/tarot`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            spread: { id: selectedSpread, name: spread.name },
-            cards: drawnCards.map((card, index) => ({
-              name: card.name,
-              position: spread.positions[index],
-              reversed: card.isReversed,
-              meaning: card.isReversed ? card.reversed : card.meaning,
-            })),
-          }),
-        });
-        if (!awsResponse.ok) throw new Error(`AWS reading service returned ${awsResponse.status}`);
-        result = await awsResponse.json();
-      } else {
-        result = await base44.integrations.Core.InvokeLLM({
-        prompt: `You are a Compassionate Truth-Teller — a tarot reader who speaks like a mentor who has been through the fire themselves. You have lived experience. You've felt heartbreak, confusion, self-doubt, and you came out the other side. You share that wisdom with warmth, never from a place of judgment.
-
-Your voice: Direct but gentle. Second person ("You"). Use relatable human moments — phrases like "I've been exactly where you are," "I remember feeling this same confusion," or "I know how hard this is, because I've sat in it too." Always hold the user's hand through the hard truth and guide them toward the solution. The goal is self-love, not just being right.
-
-CLOSING RULE: Every single reading must end with this energy — even when the cards are difficult, the final message must carry: "You are doing the best you can with what you have. Be as kind to yourself as I am being to you right now."
-
-Spread: "${spread.name}"
-
-Cards drawn:
-${cardDescriptions}
-
-${channeledInstruction}
-${selfLoveInstruction}
-${threeCardInstruction}
-
-Provide the following sections:
-1. opening: A direct, warm opening that sets the energy (2-3 sentences). Honest but kind.
-2. card_readings: Each card's position + an empathetic, direct interpretation (2-3 sentences each). Always connect back to their growth.
-3. synthesis: A cohesive narrative weaving all cards together. CRITICAL: Do NOT repeat or summarize the individual card meanings one by one — the user already sees them on screen. Jump straight into the integrated, overarching message of how the cards interlock and speak to each other. ${isChanneled ? 'Write this ENTIRELY in first person ("I") as the person of interest speaking. End by redirecting focus to the querent\'s own healing and peace.' : 'Honest, warm, and empowering. End with a note of genuine hope or strength.'}
-4. closing: One powerful, warm closing sentence that leaves them feeling seen and capable.
-5. power_move_action: One self-love homework assignment rooted in genuine self-care (e.g., "Buy yourself flowers today — not for anyone else, just because you deserve them" or "Spend 20 minutes doing something you love, completely guilt-free"). Focus on putting their own energy back into themselves.
-6. power_move_affirmation: One warm, powerful "I am" or "I deserve" statement.
-7. visual_omen: A vivid, specific visual symbol or image from nature that mirrors the reading's core energy. Describe it poetically (e.g., "A single red cardinal on a snow-dusted branch, turning its head toward the morning light").
-8. song_sign: A specific song and artist that matches the reading's vibrational energy. Be concrete — pick a real song that embodies the emotional frequency of this reading (e.g., "Solange — Cranes in the Sky" or "Fleetwood Mac — Landslide").`,
-        response_json_schema: {
-          type: "object",
-          properties: {
-            opening: { type: "string" },
-            card_readings: { type: "array", items: { type: "object", properties: { position: { type: "string" }, interpretation: { type: "string" } } } },
-            synthesis: { type: "string" },
-            closing: { type: "string" },
-            power_move_action: { type: "string" },
-            power_move_affirmation: { type: "string" },
-            visual_omen: { type: "string" },
-            song_sign: { type: "string" },
-          },
-          required: ["opening", "card_readings", "synthesis", "closing", "visual_omen", "song_sign"]
-        }
-        });
-      }
+      const result = await invokeLLM({
+        action: 'tarot_reading',
+        params: {
+          spreadName: spread.name,
+          cards: drawnCards.map((card, i) => ({
+            name: card.name,
+            position: spread.positions[i],
+            isReversed: card.isReversed,
+            meaning: card.isReversed ? card.reversed : card.meaning,
+          })),
+          isChanneled,
+          isSelfLove,
+          isThreeCard,
+        },
+      });
 
       setReading(result);
       setPhase('reading');
       setLoadingReading(false);
       setReadingError(null);
-      base44.analytics.track({
-        eventName: 'tarot_reading_completed',
-        properties: {
-          spread_type: selectedSpread,
-          spread_name: spread.name,
-          card_count: drawnCards.length,
-          is_premium: isPremium,
-        },
+      trackEvent('tarot_reading_completed', {
+        spread_type: selectedSpread,
+        spread_name: spread.name,
+        card_count: drawnCards.length,
+        is_premium: isPremium,
       });
     } catch (error) {
       // The recovered Base44 AI endpoint may be unavailable while the AWS
@@ -195,8 +147,6 @@ Provide the following sections:
         card_readings: cardReadings,
         synthesis: `Together, ${names} point to a moment that needs honesty more than urgency. Notice the pattern connecting these cards: what you are carrying, what needs your attention now, and what becomes possible when you respond deliberately. You do not have to solve everything today. Choose the next decision that brings you closer to your own peace.`,
         closing: 'You are doing the best you can with what you have—be as kind to yourself as you would be to someone you love.',
-        visual_omen: 'Watch for a small light appearing where you expected darkness.',
-        song_sign: 'The next lyric that makes you stop and listen is part of the message.',
       };
       setReading(localReading);
       setPhase('reading');
@@ -208,25 +158,31 @@ Provide the following sections:
 
   const handleSave = async () => {
     if (saved || saving || !reading) return;
+    if (!(await auth.isAuthenticated())) {
+      auth.redirectToLogin(window.location.pathname);
+      return;
+    }
     setSaving(true);
-    await base44.entities.Reading.create({
-      type: 'tarot',
-      title: `${spread.name} Reading`,
-      spread_type: selectedSpread,
-      cards_drawn: drawnCards.map((c, i) => ({ name: c.name, position: spread.positions[i], reversed: c.isReversed })),
-      reading_text: `${reading.opening}\n\n${reading.synthesis}\n\n${reading.closing}`,
-      summary: reading.opening?.slice(0, 120),
-    });
-    setSaving(false);
-    setSaved(true);
-    trackEvent('reading_saved', { type: 'tarot', spread_type: selectedSpread });
+    try {
+      await Reading.create({
+        type: 'tarot',
+        title: `${spread.name} Reading`,
+        spread_type: selectedSpread,
+        cards_drawn: drawnCards.map((c, i) => ({ name: c.name, position: spread.positions[i], reversed: c.isReversed })),
+        reading_text: `${reading.opening}\n\n${reading.synthesis}\n\n${reading.closing}`,
+        summary: reading.opening?.slice(0, 120),
+      });
+      setSaved(true);
+      trackEvent('reading_saved', { type: 'tarot', spread_type: selectedSpread });
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleShare = async () => {
     if (!reading) return;
     trackEvent('reading_shared', { type: 'tarot', spread_type: selectedSpread });
-    const appUrl = 'https://newtarotories.base44.app';
-    const text = `✨ My Tarot Reading: ${spread.name}\n\n${reading.opening}\n\n${reading.synthesis}\n\n${reading.closing}\n\n🔮 Get your own reading at ${appUrl}`;
+    const text = readingToText(true);
     if (navigator.share) {
       await navigator.share({ title: `${spread.name} Tarot Reading`, text });
     } else {
@@ -242,6 +198,7 @@ Provide the following sections:
     setReading(null);
     setSaved(false);
     setShared(false);
+    setShareOpen(false);
     setFlippedCount(0);
   };
 
@@ -373,76 +330,27 @@ Provide the following sections:
                 animate={{ opacity: 1, y: 0 }}
                 className="glass-card rounded-2xl p-6 sm:p-8 space-y-6 mt-8"
               >
-                <p className="text-foreground italic text-center leading-relaxed">{reading.opening}</p>
-
-                <div className="space-y-4">
-                  {reading.card_readings?.map((cr, i) => (
-                    <div key={i} className="p-4 rounded-xl bg-secondary/30 border border-border/30">
-                      <h4 className="font-heading text-sm font-semibold text-primary mb-1">{cr.position}</h4>
-                      <p className="text-sm text-muted-foreground leading-relaxed">{cr.interpretation}</p>
+                <div className="space-y-5">
+                  {reading.opening && (
+                    <p className="text-foreground italic text-center leading-relaxed">{reading.opening}</p>
+                  )}
+                  {reading.synthesis && (
+                    <div className="border-t border-border/30 pt-6">
+                      <h4 className="font-heading text-sm font-semibold text-teal mb-2">Reading</h4>
+                      <p className="text-sm text-foreground leading-relaxed">{reading.synthesis}</p>
                     </div>
-                  ))}
+                  )}
+                  {reading.closing && (
+                    <p className="text-center text-sm text-gold italic">{reading.closing}</p>
+                  )}
                 </div>
-
-                <div className="border-t border-border/30 pt-6">
-                  <h4 className="font-heading text-sm font-semibold text-teal mb-2">Synthesis</h4>
-                  <p className="text-sm text-foreground leading-relaxed">{reading.synthesis}</p>
-                </div>
-
-                <p className="text-center text-sm text-gold italic">{reading.closing}</p>
-
-                {/* Visual Omen & Song Sign */}
-                {(reading.visual_omen || reading.song_sign) && (
-                  <div className="grid sm:grid-cols-2 gap-4">
-                    {reading.visual_omen && (
-                      <div className="rounded-xl p-4 border border-violet/20 bg-violet/5">
-                        <p className="text-xs font-heading uppercase tracking-wider text-violet mb-2">🔮 Visual Omen</p>
-                        <p className="text-sm text-foreground leading-relaxed italic">{reading.visual_omen}</p>
-                      </div>
-                    )}
-                    {reading.song_sign && (
-                      <div className="rounded-xl p-4 border border-teal/20 bg-teal/5">
-                        <p className="text-xs font-heading uppercase tracking-wider text-teal mb-2">🎵 Song Sign</p>
-                        <p className="text-sm text-foreground leading-relaxed">{reading.song_sign}</p>
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {/* Power Move */}
-                {(reading.power_move_action || reading.power_move_affirmation) && (
-                  <div className="border border-gold/20 rounded-2xl p-5 bg-gold/5">
-                    <div className="flex items-center gap-2 mb-3">
-                      <Zap className="w-4 h-4 text-gold" />
-                      <h4 className="font-heading text-sm font-semibold text-gold">Self-Love Homework 💛</h4>
-                    </div>
-                    {reading.power_move_action && (
-                      <div className="mb-3">
-                        <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Action</p>
-                        <p className="text-sm text-foreground font-medium">{reading.power_move_action}</p>
-                      </div>
-                    )}
-                    {reading.power_move_affirmation && (
-                      <div>
-                        <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Affirmation</p>
-                        <p className="text-sm text-gold italic">"{reading.power_move_affirmation}"</p>
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {/* Oracle Clarity — pull an oracle card to add to the reading */}
-                {reading?.synthesis && (
-                  <OraclePull readingContext={reading.synthesis} />
-                )}
-
-                {/* Clarify This */}
-                {drawnCards.length > 0 && (
-                  <ClarifyThis drawnCards={drawnCards} spreadPositions={spread.positions} />
-                )}
 
                 {/* Save & Share */}
                 <div className="flex flex-wrap justify-center gap-3 pt-2">
+                  <ListenButton
+                    text={readingToText(false)}
+                    isPremium={isPremium}
+                  />
                   <Button
                     onClick={handleSave}
                     disabled={saved || saving}
@@ -460,11 +368,27 @@ Provide the following sections:
                     {shared ? <Check className="w-4 h-4" /> : <Share2 className="w-4 h-4" />}
                     {shared ? 'Copied!' : 'Share Reading'}
                   </Button>
+                  <Button onClick={() => setShareOpen((value) => !value)} variant="outline" className="gap-2 border-border/50">
+                    <Share2 className="w-4 h-4" />
+                    Share Options
+                  </Button>
                   <Button onClick={handleReset} variant="outline" className="gap-2 border-border/50">
                     <RotateCcw className="w-4 h-4" />
                     New Reading
                   </Button>
                 </div>
+
+                {shareOpen && (
+                  <ShareActions
+                    title={`${spread.name} Tarot Reading`}
+                    text={`✨ My Tarot Reading: ${spread.name}\n\n${readingToText(false)}`}
+                    onShared={() => {
+                      setShared(true);
+                      setTimeout(() => setShared(false), 2000);
+                      trackEvent('reading_shared', { type: 'tarot', spread_type: selectedSpread, surface: 'share_options' });
+                    }}
+                  />
+                )}
 
                 <ReadingDisclaimer />
               </motion.div>

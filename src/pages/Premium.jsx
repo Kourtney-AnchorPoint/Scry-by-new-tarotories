@@ -5,7 +5,8 @@ import { Button } from '@/components/ui/button';
 import SectionHeader from '@/components/shared/SectionHeader';
 import { useUserProfile } from '@/hooks/useUserProfile';
 import { trackEvent } from '@/lib/analytics';
-import { base44 } from '@/api/base44Client';
+import { stripe } from '@/api/functions/stripe';
+import { auth } from '@/api/auth';
 import { isPlayStoreApp } from '@/lib/platform';
 import confetti from 'canvas-confetti';
 
@@ -32,7 +33,8 @@ export default function Premium() {
     const sessionId = urlParams.get('session_id');
     if (sessionId && !isPremium) {
       setVerifying(true);
-      base44.functions.invoke('verifyCheckoutSession', { session_id: sessionId })
+      auth.me()
+        .then((me) => stripe.verifyCheckoutSession({ session_id: sessionId, user_email: me.email }))
         .then(() => {
           window.location.replace('/premium?welcome=1');
         })
@@ -59,10 +61,16 @@ export default function Premium() {
     setSubscribeError(null);
     trackEvent('premium_subscribe_clicked', { price: plan === 'annual' ? '80/year' : '9.99/month' });
     try {
-      const res = await base44.functions.invoke('createCheckoutSession', {
+      if (!(await auth.isAuthenticated())) {
+        auth.redirectToLogin('/premium');
+        return;
+      }
+      const me = await auth.me();
+      const res = await stripe.createCheckoutSession({
         plan,
         success_url: window.location.origin + '/premium?session_id={CHECKOUT_SESSION_ID}',
         cancel_url: window.location.origin + '/premium',
+        user_email: me.email,
       });
       if (res.data?.url) {
         window.location.href = res.data.url;
@@ -70,7 +78,7 @@ export default function Premium() {
         setSubscribeError('Something went wrong opening checkout. Please try again.');
       }
     } catch (err) {
-      setSubscribeError('Something went wrong opening checkout. Please try again.');
+      setSubscribeError('Checkout is not available yet. If you are signed in and still see this, Stripe needs to be connected before launch.');
     } finally {
       setSubscribing(false);
     }

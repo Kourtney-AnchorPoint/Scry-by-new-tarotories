@@ -3,7 +3,7 @@ import { UserPlus, Share2, Check, Copy } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import GlassCard from '@/components/shared/GlassCard';
 
-const SHARE_TEXT = `✨ I've been using Cosmic Encounters — channeled readings, tarot, and intuitive downloads that are scarily accurate. Come explore with me:`;
+const SHARE_TEXT = `✨ I've been using SCRY — channeled messages, tarot, and intuitive guidance that are scarily accurate. Come explore with me:`;
 
 const APP_URL = 'https://cosmiccommand.base44.app';
 

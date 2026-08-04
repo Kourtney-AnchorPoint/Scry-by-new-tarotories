@@ -4,8 +4,12 @@ import { UserPlus, Users, Trash2, Check } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { base44 } from '@/api/base44Client';
+import { Connection } from '@/api/entities';
+import { astronomy } from '@/api/functions/astronomy';
+import { BirthLocationDatalist, normalizeBirthLocation } from '@/lib/birthLocations';
+import { unwrapAiResult } from '@/lib/aiResult';
 import { useUserProfile } from '@/hooks/useUserProfile';
+import { auth } from '@/api/auth';
 
 export default function ConnectionHub({ onSelectConnection, selectedConnectionId }) {
   const { user } = useUserProfile();
@@ -22,9 +26,13 @@ export default function ConnectionHub({ onSelectConnection, selectedConnectionId
   }, [user?.id]);
 
   const loadConnections = async () => {
-    if (!user) return;
+    if (!user) {
+      setConnections([]);
+      setLoading(false);
+      return;
+    }
     try {
-      const result = await base44.entities.Connection.filter({ created_by_id: user.id });
+      const result = await Connection.list();
       setConnections(result);
     } catch {
       setConnections([]);
@@ -34,13 +42,17 @@ export default function ConnectionHub({ onSelectConnection, selectedConnectionId
 
   const handleSave = async () => {
     if (!form.name || !form.birth_date) return;
+    if (!auth.isAuthenticated()) {
+      auth.redirectToLogin(window.location.pathname);
+      return;
+    }
     setSaving(true);
     try {
-      await base44.entities.Connection.create({
+      await Connection.create({
         name: form.name,
         birth_date: form.birth_date,
         birth_time: form.unknownTime ? 'unknown' : form.birth_time,
-        birth_location: form.birth_location,
+        birth_location: normalizeBirthLocation(form.birth_location),
       });
       setSaved(true);
       setTimeout(() => { setSaved(false); setShowForm(false); }, 1500);
@@ -48,13 +60,14 @@ export default function ConnectionHub({ onSelectConnection, selectedConnectionId
       loadConnections();
     } catch {
       // ignore
+    } finally {
+      setSaving(false);
     }
-    setSaving(false);
   };
 
   const handleDelete = async (id) => {
     try {
-      await base44.entities.Connection.delete(id);
+      await Connection.delete(id);
       setConnections(connections.filter(c => c.id !== id));
     } catch {
       // ignore
@@ -66,12 +79,12 @@ export default function ConnectionHub({ onSelectConnection, selectedConnectionId
     try {
       const timeUnknown = !conn.birth_time || conn.birth_time === 'unknown';
       // Real astronomical calculation — same engine as the user's own chart
-      const res = await base44.functions.invoke('calculateChart', {
+      const res = await astronomy.calculateChart({
         birth_date: conn.birth_date,
         birth_time: timeUnknown ? 'unknown' : conn.birth_time,
         birth_location: conn.birth_location,
       });
-      const d = res.data;
+      const d = unwrapAiResult(res.data);
       if (!d || d.error) throw new Error(d?.error || 'Calculation failed');
       const asDecimal = (p) => p.degrees + p.minutes / 60;
       const pick = (p) => ({ sign: p.sign, degrees: asDecimal(p), house: p.house });
@@ -177,9 +190,11 @@ export default function ConnectionHub({ onSelectConnection, selectedConnectionId
                   <Input
                     value={form.birth_location}
                     onChange={e => setForm({ ...form, birth_location: e.target.value })}
+                    list="connection-birth-location-options"
                     placeholder="City, State, Country"
                     className="bg-background/50 border-border/50 text-base"
                   />
+                  <BirthLocationDatalist id="connection-birth-location-options" />
                 </div>
               </div>
               <Button

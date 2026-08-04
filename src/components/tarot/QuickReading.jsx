@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Sparkles, RotateCcw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { base44 } from '@/api/base44Client';
+import { invokeLLM } from '@/api/ai';
 import { MAJOR_ARCANA } from '@/lib/tarotData';
 import LoadingSpinner from '@/components/shared/LoadingSpinner';
 import ReadingDisclaimer from '@/components/shared/ReadingDisclaimer';
@@ -46,34 +46,20 @@ export default function QuickReading() {
 
     const meaning = card.isReversed ? card.reversed : card.meaning;
 
-    const result = await base44.integrations.Core.InvokeLLM({
-      prompt: `You are a warm, direct tarot reader. The user drew ${card.name}${card.isReversed ? ' (Reversed)' : ''}.
-
-Card meaning: ${meaning}
-
-Their chosen focus is: "${topic.label.replace(/[^\w\s]/gi, '').trim()}" — make that section the most detailed (2-3 sentences). All others get 1-2 sentences. Write in second person ("you"). Keep it real and human — no filler.
-
-Return ALL five sections every time:
-- general: overall energy in their life right now
-- love: what this means for their heart and relationships
-- money: what this means for their finances and abundance
-- career: what this means for their work and purpose
-- self: what this means for their inner world and growth
-- synthesis: 2-3 sentences tying it all together with one clear takeaway. Do NOT repeat the individual card meaning — the user already sees it. Jump straight into the overarching integrated message.`,
-      response_json_schema: {
-        type: 'object',
-        properties: {
-          general: { type: 'string' },
-          love: { type: 'string' },
-          money: { type: 'string' },
-          career: { type: 'string' },
-          self: { type: 'string' },
-          synthesis: { type: 'string' },
+    try {
+      const result = await invokeLLM({
+        action: 'quick_tarot_reading',
+        params: {
+          cardName: card.name,
+          isReversed: card.isReversed,
+          meaning,
+          topicLabel: topic.label.replace(/[^\w\s]/gi, '').trim(),
         },
-      },
-    });
-
-    setReading(result);
+      });
+      setReading(result);
+    } catch {
+      setReading(null);
+    }
     setLoading(false);
   };
 

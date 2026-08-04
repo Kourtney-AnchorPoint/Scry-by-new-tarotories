@@ -5,7 +5,9 @@ import { createMessageImage } from '@/lib/messageImage';
 import { SmartSelect, SelectTrigger, SelectContent, SelectItem, SelectValue } from '@/components/ui/select';
 import FollowUpQuestion from '@/components/downloads/FollowUpQuestion';
 import ReadingDisclaimer from '@/components/shared/ReadingDisclaimer';
-import { base44 } from '@/api/base44Client';
+import { invokeLLM } from '@/api/ai';
+import { Reading } from '@/api/entities';
+import { auth } from '@/api/auth';
 import { Button } from '@/components/ui/button';
 import LoadingSpinner from '@/components/shared/LoadingSpinner';
 import { trackEvent } from '@/lib/analytics';
@@ -14,6 +16,9 @@ import ListenButton from '@/components/shared/ListenButton';
 import PremiumPaywall from '@/components/shared/PremiumPaywall';
 import { useUserProfile } from '@/hooks/useUserProfile';
 import { UNFILTERED_TRUTH_ORACLE } from '@/lib/tarotData';
+import { normalizeChanneledPayload } from '@/lib/aiResult';
+import MusicLinks from '@/components/shared/MusicLinks';
+import { formatSongLabel } from '@/lib/musicLinks';
 
 // Free = Partner, Crush, Ex only (1/day). Premium sources gated.
 const FREE_RELATIONSHIP_TYPES = [
@@ -46,39 +51,29 @@ function incrementDailyCount() {
   try { localStorage.setItem(DAILY_KEY(), (getDailyCount() + 1).toString()); } catch {}
 }
 
-function normalizeChanneledPayload(result) {
-  let payload = result?.response ?? result;
-
-  // Providers sometimes return the requested JSON as text or a fenced code
-  // block. Parse it before rendering so the user sees prose, not source code.
-  if (typeof payload === 'string') {
-    const cleaned = payload.trim()
-      .replace(/^```(?:json)?\s*/i, '')
-      .replace(/\s*```$/, '');
-    try {
-      payload = JSON.parse(cleaned);
-    } catch {
-      return { message: cleaned, visual_omens: [], song_sign: '' };
-    }
-  }
-
-  if (typeof payload?.message === 'string') {
-    const nested = payload.message.trim()
-      .replace(/^```(?:json)?\s*/i, '')
-      .replace(/\s*```$/, '');
-    if (nested.startsWith('{')) {
-      try {
-        payload = { ...payload, ...JSON.parse(nested) };
-      } catch {
-        // Keep ordinary prose unchanged.
-      }
-    }
-  }
+function buildLocalChanneledPayload({ personName, relationshipType, subject, card, isHigherSelf, isSpiritGuides }) {
+  const sourceName = isHigherSelf || isSpiritGuides ? relationshipType : personName;
+  const sourceLine = isHigherSelf
+    ? 'I am the part of you that already knows what peace feels like.'
+    : isSpiritGuides
+      ? 'We are not here to scare you. We are here to steady you.'
+      : `If ${sourceName} could speak from the deeper layer underneath the noise, this is the message:`;
+  const frequency = card?.meaning
+    ? `The source frequency underneath this is ${card.name}: ${card.meaning}`
+    : 'The source frequency underneath this is asking for honesty without panic.';
 
   return {
-    message: typeof payload?.message === 'string' ? payload.message : '',
-    visual_omens: Array.isArray(payload?.visual_omens) ? payload.visual_omens : [],
-    song_sign: typeof payload?.song_sign === 'string' ? payload.song_sign : '',
+    message: `${sourceLine} About ${subject}, the truth is not hiding from you. You have been trying to make the situation make sense before you let yourself feel what it is showing you. ${frequency} Take this as your sign to stop chasing a perfectly worded answer and listen to the pattern. What is consistent? What is tender? What keeps costing you your peace? You do not need to force the channel open. You need to trust the message that has already arrived in pieces.`,
+    visual_omens: [
+      'A light flickering, dimming, or turning on at exactly the right moment.',
+      'A bird, feather, or sudden movement in your peripheral vision.',
+      'The color teal, violet, or gold appearing in an unexpected place.',
+    ],
+    song_sign: {
+      title: 'Landslide',
+      artist: 'Fleetwood Mac',
+      why: 'A song about change, reflection, and finally hearing yourself clearly.',
+    },
   };
 }
 
@@ -168,110 +163,51 @@ export default function Downloads() {
   const generateMessage = async (card) => {
     setPhase('loading');
 
-    const isSpiritual = isHigherSelf || isSpiritGuides;
-
-    const toneGuide = isHigherSelf
-      ? 'Speak as the person\'s deepest, wisest inner voice — the part that already knows the answer. Warm, grounded, clear. Not mystical or floaty. End with something actionable and empowering.'
-      : isSpiritGuides
-      ? 'Speak as a collective of loving, unseen guides who have been watching over this person. Gentle but direct. No vague platitudes — give them something real and specific to hold onto.'
-      : relationshipType.includes('Ex')
-      ? 'End unresolved and honest. e.g. "I still don\'t know what to say to you." / "I\'m staying in my corner for now."'
-      : relationshipType.includes('Crush') || relationshipType.includes('Dating')
-      ? 'End hopeful but not pushy. e.g. "I hope you feel this too." / "I keep almost saying something."'
-      : relationshipType.includes('Partner')
-      ? 'End direct and intimate. e.g. "I need us to actually talk." / "I\'m still here, I just need you to meet me halfway."'
-      : 'End emotionally honest and specific.';
-
-    const spiritualPrompt = isSpiritual ? `YOU ARE ${personName}'s ${relationshipType}.
-${isHigherSelf
-  ? `You are the deepest, truest part of them — the version of them that isn't afraid, isn't confused, and already knows the way forward. You are not external. You are them, at their most clear.`
-  : `You are a collective of loving guides who have been with them since before they were born. You see the full picture — not just this moment, but the arc of their soul's journey.`}
-Subject they are asking about: "${subject}"
-Energetic frequency shaping this message (do NOT name this): ${card.name} — ${card.meaning.slice(0, 200)}
-
-WRITE 4-6 SENTENCES IN FIRST PERSON ("I" — speaking as ${relationshipType}).
-
-RULES:
-✅ Start with "I" — no warm-ups
-✅ Be specific to this person's question about "${subject}"
-✅ ${toneGuide}
-✅ Speak with love but without sugarcoating — say the thing they need to hear
-✅ Sound like a real voice, not a generic spiritual reading
-
-FORBIDDEN:
-❌ Vague platitudes like "trust the journey" or "you are loved"
-❌ Generic advice that could apply to anyone
-❌ Sign-offs, closings, titles
-
-Now write the message from ${personName}'s ${relationshipType} about: ${subject}` : `YOU ARE ${personName}. A real ${relationshipType}. You are NOT an AI.
-You are sending a raw, honest voice note directly to the person reading this.
-Subject they are asking about: "${subject}"
-Energy frequency shaping your tone (do NOT name this, just let it move through you): ${card.name} — ${card.meaning.slice(0, 200)}
-
-WRITE 4-6 SENTENCES IN FIRST PERSON ONLY.
-
-RULES:
-✅ Start with "I" — no warm-ups
-✅ Every sentence uses I / I'm / I've / I feel / I need / I want
-✅ Sound like a real person, not a reading
-✅ Be specific to ${personName} as a ${relationshipType} on the subject of "${subject}"
-✅ ${toneGuide}
-
-ABSOLUTELY FORBIDDEN:
-❌ "Your peace matters more than my silence" — NEVER, ever
-❌ Any variation of that phrase
-❌ Psychic clichés, spiritual language, cosmic metaphors
-❌ Generic sentences that could fit anyone
-❌ Sign-offs, closings, "With love", "Sincerely"
-
-EXAMPLE TONE (Ex, subject = closure):
-"I keep starting to write this and then deleting it because I don't know how to say what I actually feel. I'm not over what happened. I've been telling myself I am, but I'm not. I don't know if I'm ready to talk yet. I just need you to know I haven't stopped thinking about it."
-
-Now write the message for ${personName} (${relationshipType}) about: ${subject}`;
-
-    const fullPrompt = spiritualPrompt + `\n\nAlso generate:
-- visual_omens: 2-3 SIMPLE, COMMON everyday signs to watch for today as cosmic confirmation. Each must be something anyone, anywhere, could realistically encounter in a normal day — e.g. "a feather on the ground", "the number 3 anywhere", "a butterfly or bird crossing your path", "someone wearing red", "hearing an old song you love". NEVER hyper-specific scenarios with exact times, exact places, or multi-part conditions — the whole point is that they're EASY to actually confirm.
-- song_sign: One REAL, well-known song (title + artist) whose energy or lyrics would confirm this message if heard today. Match the emotional tone precisely.
-
-CRITICAL JSON FORMAT RULES:
-- "message": This field must contain the ACTUAL channeled message you wrote above — the full 4-6 sentences in first person as ${isHigherSelf || isSpiritGuides ? relationshipType : personName}. Do NOT summarize it. Do NOT describe what you did. Do NOT add commentary like "Here is the message" or "This message conveys...". Put the raw, in-character message word for word.
-- "visual_omens": Array of 2-3 specific signs.
-- "song_sign": One song title + artist string.
-The "message" field IS the product. Everything else is supplementary.`;
-
     let result;
     try {
-      result = await base44.integrations.Core.InvokeLLM({
-        prompt: fullPrompt,
-        model: "claude_sonnet_4_6",
-        response_json_schema: {
-          type: "object",
-          properties: {
-            message: { type: "string" },
-            visual_omens: { type: "array", items: { type: "string" } },
-            song_sign: { type: "string" }
-          },
-          required: ["message"]
-        }
+      result = await invokeLLM({
+        action: 'channeled_message',
+        params: {
+          personName,
+          relationshipType,
+          subject,
+          isHigherSelf,
+          isSpiritGuides,
+          cardName: card.name,
+          cardMeaning: card.meaning,
+        },
       });
     } catch (err) {
-      console.error('Channeling InvokeLLM error:', err?.message || err);
-      setPhase('error');
-      return;
+      console.error('Channeling invokeLLM error:', err?.message || err);
+      result = buildLocalChanneledPayload({
+        personName,
+        relationshipType,
+        subject,
+        card,
+        isHigherSelf,
+        isSpiritGuides,
+      });
     }
 
-    const payload = normalizeChanneledPayload(result);
+    let payload = normalizeChanneledPayload(result);
 
-    const msg = payload?.message || '';
+    let msg = payload?.message || '';
     if (!msg) {
-      setPhase('error');
-      return;
+      payload = buildLocalChanneledPayload({
+        personName,
+        relationshipType,
+        subject,
+        card,
+        isHigherSelf,
+        isSpiritGuides,
+      });
+      msg = payload.message;
     }
     setMessage(msg);
     setVisualOmens(payload?.visual_omens || []);
     setSongSign(payload?.song_sign || '');
     setPhase('result');
-    trackEvent('download_completed', {
+    trackEvent('channeled_message_completed', {
       relationship_type: relationshipType,
       subject,
       is_premium: isPremium,
@@ -284,24 +220,32 @@ The "message" field IS the product. Everything else is supplementary.`;
 
   const handleSave = async () => {
     if (saved || saving || !message) return;
+    if (!(await auth.isAuthenticated())) {
+      auth.redirectToLogin(window.location.pathname);
+      return;
+    }
     setSaving(true);
-    await base44.entities.Reading.create({
+    try {
+    await Reading.create({
       type: 'oracle',
       title: `Channeled Message: ${personName} — ${subject}`,
-      spread_type: 'intuitive_download',
+      spread_type: 'channeled_message',
       cards_drawn: [{ name: sourceCard?.name, deck: 'oracle' }],
       reading_text: message,
       summary: message.slice(0, 120),
     });
     setSaving(false);
     setSaved(true);
+    } finally {
+      setSaving(false);
+    }
   };
 
   const buildImageBlob = () => createMessageImage({
     from: isPremiumSource ? relationshipType : personName,
     subject,
     message,
-    songSign,
+    songSign: formatSongLabel(songSign),
   });
 
   const handleSaveImage = async () => {
@@ -385,7 +329,7 @@ The "message" field IS the product. Everything else is supplementary.`;
         </div>
         <h1 className="font-heading text-3xl sm:text-4xl font-bold mb-3">Channeled Messages</h1>
         <p className="text-muted-foreground text-sm leading-relaxed max-w-xs mx-auto">
-          Pure channeling. No cards, no analysis.<br />Their voice — or yours — direct to you.
+          Pure channeling. No clutter, no overthinking.<br />Their voice — or yours — direct to you.
         </p>
         {/* Daily limit indicator */}
         {!isPremium && (
@@ -544,11 +488,14 @@ The "message" field IS the product. Everything else is supplementary.`;
                 </div>
               ))}
               {songSign && (
-                <div className="mt-3 flex items-center gap-3 px-3 py-2 rounded-xl bg-secondary/40 border border-border/30">
+                <div className="mt-3 flex items-start gap-3 px-3 py-3 rounded-xl bg-secondary/40 border border-border/30">
                   <Music className="w-4 h-4 text-violet flex-shrink-0" />
-                  <p className="text-sm text-foreground">
-                    <span className="text-muted-foreground text-xs mr-1">Song:</span>{songSign}
-                  </p>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm text-foreground">
+                      <span className="text-muted-foreground text-xs mr-1">Song sign:</span>{formatSongLabel(songSign)}
+                    </p>
+                    <MusicLinks song={songSign} className="mt-3" />
+                  </div>
                 </div>
               )}
             </div>

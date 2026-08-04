@@ -1,4 +1,4 @@
-import { base44 } from '@/api/base44Client';
+import { client } from '@/lib/amplifyClient';
 
 function getSessionId() {
   try {
@@ -13,16 +13,12 @@ function getSessionId() {
   }
 }
 
+// Writes to the app's own AppEvent log via the trackEvent mutation — works
+// for anonymous visitors too. Base44's bundled platform-analytics product
+// has no AWS equivalent, so this is now the only event stream.
 export function trackEvent(eventName, properties = {}) {
-  // Platform analytics (signed-in users only — silently no-ops for anonymous)
   try {
-    base44.analytics.track({ eventName, properties });
-  } catch {
-    // analytics is non-critical — silent fail
-  }
-  // Our own event log — works for EVERYONE, anonymous visitors included
-  try {
-    base44.functions.invoke('trackEvent', {
+    client.mutations.trackEvent({
       event_name: eventName,
       properties,
       session_id: getSessionId(),

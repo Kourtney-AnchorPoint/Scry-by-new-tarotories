@@ -4,7 +4,7 @@ import { motion } from 'framer-motion';
 import { Heart, Sparkles, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import LoadingSpinner from '@/components/shared/LoadingSpinner';
-import { base44 } from '@/api/base44Client';
+import { client } from '@/lib/amplifyClient';
 
 const TIER_COLORS = {
   Soulmate: 'text-pink',
@@ -39,7 +39,13 @@ export default function SharedReading() {
   useEffect(() => {
     async function load() {
       try {
-        const record = await base44.entities.SharedReading.get(id);
+        // Public API-key read — the recipient of a share link has no account,
+        // so this can't rely on a Cognito session existing.
+        const { data: record, errors } = await client.models.SharedReading.get(
+          { id },
+          { authMode: 'apiKey' }
+        );
+        if (errors?.length || !record) throw new Error('not found');
         setReading(record);
       } catch {
         setNotFound(true);

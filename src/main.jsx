@@ -1,15 +1,19 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
+import { Amplify } from 'aws-amplify'
+import outputs from '../amplify_outputs.json'
 import App from '@/App.jsx'
 import '@/index.css'
 
-// Apply theme based on system preference
+Amplify.configure(outputs)
+
+// SCRY is designed as a dark cosmic app. Do not depend on the device's
+// light/dark preference, because light mode makes the dark UI look like an
+// empty frame with low-contrast text.
 const applyTheme = () => {
-  const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-  document.documentElement.classList.toggle('dark', prefersDark);
+  document.documentElement.classList.add('dark');
 };
 applyTheme();
-window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', applyTheme);
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <App />

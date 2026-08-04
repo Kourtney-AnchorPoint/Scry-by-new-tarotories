@@ -2,7 +2,7 @@ import React, { createContext, useContext, useRef, useCallback, useState } from 
 import { useLocation, useNavigate } from 'react-router-dom';
 
 // Root paths that each tab "owns"
-export const TAB_ROOTS = ['/', '/tarot', '/love', '/downloads', '/astrology', '/oracle', '/numerology', '/journal', '/account'];
+export const TAB_ROOTS = ['/', '/tarot', '/love', '/channeled', '/downloads', '/astrology', '/oracle', '/numerology', '/journal', '/account'];
 
 function getTabRoot(pathname) {
   // Find the longest matching tab root for the current path

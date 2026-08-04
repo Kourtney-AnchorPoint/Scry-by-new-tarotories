@@ -1,16 +1,16 @@
 import { Toaster } from "@/components/ui/toaster"
 import { QueryClientProvider } from '@tanstack/react-query'
 import { queryClientInstance } from '@/lib/query-client'
-import { BrowserRouter as Router, Route, Routes, Navigate } from 'react-router-dom';
+import { BrowserRouter as Router, Route, Routes, Navigate, Outlet, useLocation } from 'react-router-dom';
 import PageNotFound from './lib/PageNotFound';
 import { AuthProvider, useAuth } from '@/lib/AuthContext';
 import { useEffect } from 'react';
 import { trackVisit } from '@/lib/analytics';
 import { detectPlayStore } from '@/lib/platform';
-import UserNotRegisteredError from '@/components/UserNotRegisteredError';
 
 import AppLayout from '@/components/layout/AppLayout';
 import { TabHistoryProvider } from '@/lib/TabHistoryContext';
+import Login from '@/pages/Login';
 import Dashboard from '@/pages/Dashboard';
 import Tarot from '@/pages/Tarot';
 import Astrology from '@/pages/Astrology';
@@ -28,14 +28,31 @@ import SharedReading from '@/pages/SharedReading';
 import Insights from '@/pages/Insights';
 import Privacy from '@/pages/Privacy';
 import Terms from '@/pages/Terms';
+import { auth } from '@/api/auth';
+
+const RequireAuth = ({ isAuthenticated }) => {
+  const location = useLocation();
+
+  useEffect(() => {
+    if (!isAuthenticated) {
+      auth.redirectToLogin(location.pathname + location.search);
+    }
+  }, [isAuthenticated, location.pathname, location.search]);
+
+  if (!isAuthenticated) return null;
+  return <Outlet />;
+};
 
 const AuthenticatedApp = () => {
-  const { isLoadingAuth, isLoadingPublicSettings, authError, navigateToLogin } = useAuth();
+  const { isLoadingAuth, isAuthenticated } = useAuth();
 
   // Count every visitor — anonymous included — once per session
-  useEffect(() => { detectPlayStore(); trackVisit(); }, []);
+  useEffect(() => {
+    detectPlayStore();
+    if (isAuthenticated) trackVisit();
+  }, [isAuthenticated]);
 
-  if (isLoadingPublicSettings || isLoadingAuth) {
+  if (isLoadingAuth) {
     return (
       <div className="fixed inset-0 flex items-center justify-center bg-background">
         <div className="flex flex-col items-center gap-4">
@@ -46,37 +63,33 @@ const AuthenticatedApp = () => {
     );
   }
 
-  if (authError) {
-    if (authError.type === 'user_not_registered') {
-      return <UserNotRegisteredError />;
-    } else if (authError.type === 'auth_required') {
-      navigateToLogin();
-      return null;
-    }
-  }
-
   return (
     <Routes>
-      <Route element={<AppLayout />}>
-        <Route path="/" element={<Dashboard />} />
-        <Route path="/tarot" element={<Tarot />} />
-        <Route path="/astrology" element={<Astrology />} />
-        <Route path="/oracle" element={<Oracle />} />
-        <Route path="/numerology" element={<Numerology />} />
-        <Route path="/pendulum" element={<Pendulum />} />
-        <Route path="/journal" element={<Journal />} />
-        <Route path="/upgrade" element={<Navigate to="/premium" replace />} />
-        <Route path="/premium" element={<Premium />} />
-        <Route path="/account" element={<Account />} />
-        <Route path="/tarot/history" element={<TarotHistory />} />
-        <Route path="/downloads" element={<Downloads />} />
-        <Route path="/altar" element={<Altar />} />
+      <Route path="/login" element={<Login />} />
+      <Route path="/privacy" element={<Privacy />} />
+      <Route path="/terms" element={<Terms />} />
+
+      <Route element={<RequireAuth isAuthenticated={isAuthenticated} />}>
         <Route path="/shared/:id" element={<SharedReading />} />
-        <Route path="/insights" element={<Insights />} />
-        <Route path="/privacy" element={<Privacy />} />
-        <Route path="/terms" element={<Terms />} />
+        <Route element={<AppLayout />}>
+          <Route path="/" element={<Dashboard />} />
+          <Route path="/tarot" element={<Tarot />} />
+          <Route path="/astrology" element={<Astrology />} />
+          <Route path="/oracle" element={<Oracle />} />
+          <Route path="/numerology" element={<Numerology />} />
+          <Route path="/pendulum" element={<Pendulum />} />
+          <Route path="/upgrade" element={<Navigate to="/premium" replace />} />
+          <Route path="/premium" element={<Premium />} />
+          <Route path="/channeled" element={<Downloads />} />
+          <Route path="/downloads" element={<Navigate to="/channeled" replace />} />
+          <Route path="/journal" element={<Journal />} />
+          <Route path="/account" element={<Account />} />
+          <Route path="/tarot/history" element={<TarotHistory />} />
+          <Route path="/altar" element={<Altar />} />
+          <Route path="/insights" element={<Insights />} />
+          <Route path="*" element={<PageNotFound />} />
+        </Route>
       </Route>
-      <Route path="*" element={<PageNotFound />} />
     </Routes>
   );
 };

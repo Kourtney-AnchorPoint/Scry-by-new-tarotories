@@ -1,5 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { base44 } from '@/api/base44Client';
+import { auth } from '@/api/auth';
+import { UserProfile } from '@/api/entities';
+import { stripe } from '@/api/functions/stripe';
 
 export function useUserProfile() {
   const queryClient = useQueryClient();
@@ -8,8 +10,10 @@ export function useUserProfile() {
     queryKey: ['userProfile'],
     queryFn: async () => {
       try {
-        const me = await base44.auth.me();
-        const profiles = await base44.entities.UserProfile.filter({ created_by_id: me.id });
+        const me = await auth.me();
+        // Amplify's owner-based authorization already scopes list() to just
+        // this Cognito user's own records — no explicit filter needed.
+        const profiles = await UserProfile.list();
         // Once per day: verify Stripe subscription is still active (demotes canceled subs)
         const p = profiles?.[0];
         if (p?.is_premium && p?.stripe_customer_id) {
@@ -17,7 +21,7 @@ export function useUserProfile() {
           if (localStorage.getItem('sub_check_date') !== today) {
             localStorage.setItem('sub_check_date', today);
             try {
-              const res = await base44.functions.invoke('checkSubscription', {});
+              const res = await stripe.checkSubscription({ user_email: me.email });
               if (res.data?.premium === false) p.is_premium = false;
             } catch {
               // check failed — keep current status, retry tomorrow
@@ -37,13 +41,13 @@ export function useUserProfile() {
   const isPremium = profile?.is_premium === true;
 
   const createProfile = useMutation({
-    mutationFn: (data) => base44.entities.UserProfile.create(data),
+    mutationFn: (data) => UserProfile.create({ ...data, email: user?.email }),
     onMutate: async (newData) => {
       await queryClient.cancelQueries({ queryKey: ['userProfile'] });
       const previous = queryClient.getQueryData(['userProfile']);
       queryClient.setQueryData(['userProfile'], (old) => ({
         ...old,
-        profiles: [{ ...newData, id: '__optimistic__', created_by: old?.user?.email }],
+        profiles: [{ ...newData, id: '__optimistic__', email: old?.user?.email }],
       }));
       return { previous };
     },
@@ -52,7 +56,7 @@ export function useUserProfile() {
   });
 
   const updateProfile = useMutation({
-    mutationFn: (data) => base44.entities.UserProfile.update(profile?.id, data),
+    mutationFn: (data) => UserProfile.update(profile?.id, data),
     onMutate: async (newData) => {
       await queryClient.cancelQueries({ queryKey: ['userProfile'] });
       const previous = queryClient.getQueryData(['userProfile']);

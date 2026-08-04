@@ -1,10 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Outlet, Link, useLocation } from 'react-router-dom';
 import { Sparkles, Sun, BookOpen, Hash, LayoutDashboard, Menu, X, Crown, Star, ChevronLeft, UserCircle, LogOut, Zap, Flame, BarChart3, Gem, Home } from 'lucide-react';
-import GuideOrb from '@/components/guide/GuideOrb';
 import WelcomeRitual from '@/components/onboarding/WelcomeRitual';
-import SignUpGate from '@/components/onboarding/SignUpGate';
-import { base44 } from '@/api/base44Client';
+import { auth } from '@/api/auth';
 import { motion, AnimatePresence } from 'framer-motion';
 import StarField from './StarField';
 import BottomTabBar from './BottomTabBar';
@@ -22,7 +20,7 @@ const navItems = [
   { path: '/oracle', label: 'Oracle', icon: Star },
   { path: '/pendulum', label: 'Pendulum', icon: Gem },
   { path: '/astrology', label: 'Astrology', icon: Sun },
-  { path: '/downloads', label: 'Channeled', icon: Zap },
+  { path: '/channeled', label: 'Channeled', icon: Zap },
   { path: '/numerology', label: 'Numerology', icon: Hash },
   { path: '/journal', label: 'Journal', icon: BookOpen },
   { path: '/altar', label: 'Altar', icon: Flame },
@@ -57,10 +55,10 @@ export default function AppLayout() {
         style={{ paddingTop: 'env(safe-area-inset-top)' }}
       >
         <div className="max-w-7xl mx-auto px-4 sm:px-6">
-          <div className="flex items-center justify-between h-14 sm:h-16">
+          <div className="flex items-center justify-between gap-3 min-h-16 sm:min-h-20 py-2">
 
             {/* Left: back button on mobile sub-pages or logo */}
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 sm:gap-3 min-w-0">
               {showBack ? (
                 <button
                   onClick={() => canGoBack() ? goBack() : window.history.back()}
@@ -72,11 +70,11 @@ export default function AppLayout() {
                 </button>
               ) : null}
 
-              <Link to="/" className="flex items-center gap-2 select-none">
-                <img src="/scry-app-icon.png" alt="SCRY" className="w-9 h-9 rounded-xl object-cover border border-violet/30 shadow-[0_0_18px_rgba(212,21,154,.28)]" />
+              <Link to="/" className="flex items-center gap-2 sm:gap-3 select-none min-w-0">
+                <img src="/scry-app-icon.png" alt="SCRY" className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl object-cover border border-violet/30 shadow-[0_0_18px_rgba(212,21,154,.28)] shrink-0" />
                 <span className="hidden sm:flex items-baseline gap-2">
-                  <span className="font-heading text-base sm:text-lg font-semibold tracking-wide shimmer-text">Scry</span>
-                  <span className="text-[10px] text-muted-foreground tracking-widest uppercase">by New Tarotories</span>
+                  <span className="font-heading text-lg font-semibold tracking-wide shimmer-text">Scry</span>
+                  <span className="hidden xl:inline text-[10px] text-muted-foreground tracking-widest uppercase">by New Tarotories</span>
                 </span>
                 {/* Mobile title */}
                 <span className="font-heading text-sm font-semibold sm:hidden">
@@ -99,7 +97,7 @@ export default function AppLayout() {
             </div>
 
             {/* Desktop Nav */}
-            <nav className="hidden md:flex items-center gap-1">
+            <nav className="hidden xl:flex items-center justify-center gap-2">
               {navItems.map(item => {
                 const Icon = item.icon;
                 const isActive = location.pathname === item.path;
@@ -107,7 +105,7 @@ export default function AppLayout() {
                   <Link
                     key={item.path}
                     to={item.path}
-                    className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-300 select-none ${
+                    className={`flex items-center gap-2 px-3.5 py-2.5 rounded-xl text-sm font-medium transition-all duration-300 select-none ${
                       isActive
                         ? 'bg-primary/20 text-primary'
                         : 'text-muted-foreground hover:text-foreground hover:bg-secondary/50'
@@ -121,11 +119,11 @@ export default function AppLayout() {
             </nav>
 
             {/* Right: Premium + Account + hamburger */}
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 sm:gap-3 shrink-0">
               {user?.role === 'admin' && (
                 <Link
                   to="/insights"
-                  className="hidden md:flex items-center justify-center w-9 h-9 rounded-lg hover:bg-secondary/50 text-muted-foreground hover:text-foreground transition-colors select-none"
+                  className="hidden xl:flex items-center justify-center w-11 h-11 rounded-xl hover:bg-secondary/50 text-muted-foreground hover:text-foreground transition-colors select-none"
                   aria-label="Insights"
                   title="Insights"
                 >
@@ -135,33 +133,33 @@ export default function AppLayout() {
               {!isPremium && !isPlayStoreApp() && (
                 <Link
                   to="/premium"
-                  className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gradient-to-r from-gold/20 to-violet/20 border border-gold/30 text-gold text-xs font-semibold hover:from-gold/30 hover:to-violet/30 transition-all select-none"
+                  className="hidden sm:flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-gold/20 to-violet/20 border border-gold/30 text-gold text-xs font-semibold hover:from-gold/30 hover:to-violet/30 transition-all select-none"
                 >
                   <Crown className="w-3.5 h-3.5" />
                   Premium
                 </Link>
               )}
               <Link
-                to="/account"
-                className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-lg hover:bg-secondary/50 text-muted-foreground hover:text-foreground transition-colors select-none"
-                aria-label="Account"
+                to={user ? '/account' : '/login'}
+                className="hidden xl:flex items-center gap-2 px-3.5 py-2 rounded-xl hover:bg-secondary/50 text-muted-foreground hover:text-foreground transition-colors select-none"
+                aria-label={user ? 'Account' : 'Sign In'}
               >
-                {user?.email && (
-                  <span className="text-xs text-muted-foreground truncate max-w-[140px]">{user.email}</span>
-                )}
+                <span className="text-xs text-muted-foreground truncate max-w-[140px]">{user?.email || 'Sign In'}</span>
                 <UserCircle className="w-5 h-5" />
               </Link>
-              <button
-                onClick={() => base44.auth.logout('/')}
-                className="hidden md:flex items-center justify-center w-9 h-9 rounded-lg hover:bg-secondary/50 text-muted-foreground hover:text-foreground transition-colors select-none"
-                aria-label="Sign Out"
-                title="Sign Out"
-              >
-                <LogOut className="w-4 h-4" />
-              </button>
+              {user && (
+                <button
+                  onClick={() => auth.logout('/')}
+                  className="hidden xl:flex items-center justify-center w-11 h-11 rounded-xl hover:bg-secondary/50 text-muted-foreground hover:text-foreground transition-colors select-none"
+                  aria-label="Sign Out"
+                  title="Sign Out"
+                >
+                  <LogOut className="w-4 h-4" />
+                </button>
+              )}
               <button
                 onClick={() => setMobileOpen(!mobileOpen)}
-                className="md:hidden flex items-center justify-center w-11 h-11 rounded-lg hover:bg-secondary/50 text-muted-foreground select-none"
+                className="xl:hidden flex items-center justify-center w-11 h-11 rounded-xl hover:bg-secondary/50 text-muted-foreground select-none"
               >
                 {mobileOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
               </button>
@@ -176,9 +174,9 @@ export default function AppLayout() {
               initial={{ height: 0, opacity: 0 }}
               animate={{ height: 'auto', opacity: 1 }}
               exit={{ height: 0, opacity: 0 }}
-              className="md:hidden border-t border-border/50 overflow-hidden"
+              className="xl:hidden border-t border-border/50 overflow-hidden"
             >
-              <nav className="p-4 space-y-1">
+              <nav className="p-4 sm:p-5 grid grid-cols-1 sm:grid-cols-2 gap-2">
                 {navItems.map(item => {
                   const Icon = item.icon;
                   const isActive = location.pathname === item.path;
@@ -187,7 +185,7 @@ export default function AppLayout() {
                       key={item.path}
                       to={item.path}
                       onClick={() => setMobileOpen(false)}
-                      className={`flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all select-none ${
+                      className={`flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all select-none ${
                         isActive
                           ? 'bg-primary/20 text-primary'
                           : 'text-muted-foreground hover:text-foreground hover:bg-secondary/50'
@@ -202,7 +200,7 @@ export default function AppLayout() {
                   <Link
                     to="/premium"
                     onClick={() => setMobileOpen(false)}
-                    className={`flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all select-none ${
+                    className={`flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all select-none ${
                       location.pathname === '/premium'
                         ? 'bg-gold/20 text-gold'
                         : 'text-gold hover:bg-gold/10'
@@ -213,22 +211,22 @@ export default function AppLayout() {
                   </Link>
                 )}
                 <Link
-                  to="/account"
+                  to={user ? '/account' : '/login'}
                   onClick={() => setMobileOpen(false)}
-                  className={`flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all select-none ${
+                  className={`flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all select-none ${
                     location.pathname === '/account'
                       ? 'bg-primary/20 text-primary'
                       : 'text-muted-foreground hover:text-foreground hover:bg-secondary/50'
                   }`}
                 >
                   <UserCircle className="w-5 h-5" />
-                  My Data
+                  {user ? 'My Data' : 'Sign In'}
                 </Link>
                 {user?.role === 'admin' && (
                   <Link
                     to="/insights"
                     onClick={() => setMobileOpen(false)}
-                    className={`flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all select-none ${
+                    className={`flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all select-none ${
                       location.pathname === '/insights'
                         ? 'bg-primary/20 text-primary'
                         : 'text-muted-foreground hover:text-foreground hover:bg-secondary/50'
@@ -238,14 +236,16 @@ export default function AppLayout() {
                     Insights
                   </Link>
                 )}
-                <button
-                  onClick={() => { setMobileOpen(false); base44.auth.logout('/'); }}
-                  className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-secondary/50 transition-all select-none"
-                >
-                  <LogOut className="w-5 h-5" />
-                  Sign Out
-                </button>
-                <div className="border-t border-border/30 pt-2 mt-2 flex gap-4 px-4 py-2">
+                {user && (
+                  <button
+                    onClick={() => { setMobileOpen(false); auth.logout('/'); }}
+                    className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-secondary/50 transition-all select-none"
+                  >
+                    <LogOut className="w-5 h-5" />
+                    Sign Out
+                  </button>
+                )}
+                <div className="sm:col-span-2 border-t border-border/30 pt-3 mt-2 flex flex-wrap gap-4 px-4 py-2">
                   <Link to="/privacy" onClick={() => setMobileOpen(false)} className="text-xs text-muted-foreground hover:text-foreground">Privacy Policy</Link>
                   <Link to="/terms" onClick={() => setMobileOpen(false)} className="text-xs text-muted-foreground hover:text-foreground">Terms & Conditions</Link>
                 </div>
@@ -276,11 +276,6 @@ export default function AppLayout() {
       {/* Floating Contact Button */}
       <ContactButton />
 
-      {/* Luna — floating cosmic guide */}
-      <GuideOrb />
-
-      {/* Step one: invite anonymous visitors to create an account */}
-      <SignUpGate />
 
       {/* First-visit welcome ritual — captures new member info */}
       <WelcomeRitual />

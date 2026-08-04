@@ -13,55 +13,10 @@ import SynastryReport from '@/components/astrology/SynastryReport';
 import { useUserProfile } from '@/hooks/useUserProfile';
 import PlacementDeepDive from '@/components/astrology/PlacementDeepDive';
 import HouseDeepDive from '@/components/astrology/HouseDeepDive';
-import { base44 } from '@/api/base44Client';
+import { astronomy } from '@/api/functions/astronomy';
+import { invokeLLM } from '@/api/ai';
 import { trackEvent } from '@/lib/analytics';
-
-const HOUSES_SCHEMA = {
-  type: "object",
-  properties: {
-    houses: {
-      type: "array",
-      items: {
-        type: "object",
-        properties: {
-          house: { type: "number" },
-          headline: { type: "string" },
-          meaning: { type: "string" }
-        },
-        required: ["house", "headline", "meaning"]
-      }
-    }
-  },
-  required: ["houses"]
-};
-
-const PATTERN_SCHEMA = {
-  type: "object",
-  properties: {
-    core_layers: {
-      type: "object",
-      properties: {
-        core: { type: "string" },
-        development: { type: "string" },
-        relationships: { type: "string" },
-      },
-      required: ["core", "development", "relationships"]
-    },
-    placements: {
-      type: "array",
-      items: {
-        type: "object",
-        properties: {
-          planet: { type: "string" },
-          headline: { type: "string" },
-          meaning: { type: "string" }
-        },
-        required: ["planet", "headline", "meaning"]
-      }
-    }
-  },
-  required: ["core_layers", "placements"]
-};
+import { unwrapAiResult } from '@/lib/aiResult';
 
 export default function Astrology() {
   const { profile, isLoading } = useUserProfile();
@@ -94,14 +49,15 @@ export default function Astrology() {
     setChartError(null);
     try {
       // Real astronomical calculation (ephemeris + Placidus houses) — no AI estimation
-      const res = await base44.functions.invoke('calculateChart', {
+      const res = await astronomy.calculateChart({
         birth_date: profile.birth_date,
         birth_time: birthTimeUnknown ? 'unknown' : profile.birth_time,
         birth_location: profile.birth_location,
         birth_zip: profile.birth_zip,
       });
-      const d = res.data;
+      const d = unwrapAiResult(res.data);
       if (!d || d.error) throw new Error(d?.error || 'Calculation failed');
+      if (!d.planets?.sun || !d.planets?.moon) throw new Error('Chart response was incomplete');
 
       const asDecimal = (p) => p.degrees + p.minutes / 60;
       const houses = (d.houses || []).map(h => ({
@@ -139,8 +95,14 @@ export default function Astrology() {
       localStorage.setItem(cacheKey, JSON.stringify(result));
       setChartData(result);
       trackEvent('natal_chart_calculated', { has_birth_time: !birthTimeUnknown });
-    } catch {
-      setChartError('Unable to calculate your birth chart. Please try again.');
+    } catch (error) {
+      console.info('Natal chart calculation failed:', error);
+      const message = String(error?.message || '').toLowerCase();
+      setChartError(
+        message.includes('location') || message.includes('find')
+          ? 'I could not find that birthplace. Try “City, State/Province, Country” — for example, “Oklahoma City, Oklahoma, United States.”'
+          : 'Unable to calculate your birth chart. Please check the birthplace format and try again.'
+      );
     }
     setChartLoading(false);
   };
@@ -175,28 +137,9 @@ export default function Astrology() {
         .flatMap(h => (h.planets || []).map(p => `${p} in House ${h.number} (${h.sign})`))
         .join(', ') || 'not available';
 
-      const result = await base44.integrations.Core.InvokeLLM({
-        prompt: `You are a deeply psychological astrologer in the style of "The Pattern" app. You speak in first person, direct, raw, and piercing. No jargon. No "the cosmos whispers." You read energy like you're seeing someone's soul.
-
-Here is the natal chart:
-${chartSummary}
-
-Write three core psychological layers:
-
-1. "Your Core" — Synthesize the Sun and Ascendant. This is about identity, ego, and how you approach life. Multi-paragraph, direct, psychological.
-
-2. "Your Development" — Synthesize Saturn and the Midheaven (10th house). This is about career struggles, responsibilities, and growth focus. Multi-paragraph.
-
-3. "Your Relationships" — Synthesize the Moon, Venus, and Descendant (7th house). This is about emotional needs, attachment styles, and love language. Multi-paragraph.
-
-Finally, write a detailed deep-dive for EVERY placement: Rising, Sun, Moon, Mercury, Venus, Mars, Jupiter, Saturn. For each one return:
-- "planet": a label like "Moon in Cancer — 2nd House"
-- "headline": one punchy sentence capturing its essence
-- "meaning": 2-3 paragraphs of raw, specific psychological insight weaving together what the sign AND the house placement mean for this person. No generic keyword lists — write like you can see their soul.
-
-House placements (use these exact houses): ${houseMap}`,
-        response_json_schema: PATTERN_SCHEMA,
-        model: "claude_sonnet_4_6"
+      const result = await invokeLLM({
+        action: 'astrology_pattern',
+        params: { chartSummary, houseMap },
       });
       localStorage.setItem(patternKey, JSON.stringify(result));
       setPatternData(result);
@@ -218,20 +161,9 @@ House placements (use these exact houses): ${houseMap}`,
       const houseList = chartData.houses
         .map(h => `House ${h.number}: ${h.sign} on the cusp${h.planets?.length ? ' — contains ' + h.planets.join(', ') : ' — empty'}`)
         .join('\n');
-      const result = await base44.integrations.Core.InvokeLLM({
-        prompt: `You are a deeply psychological astrologer in the style of "The Pattern" app. Direct, raw, second person, no jargon, no "the cosmos whispers."
-
-Here are this person's exact Placidus houses, calculated from real ephemeris data:
-${houseList}
-
-For EACH of the 12 houses, write a full interpretation:
-- "house": the house number (1-12)
-- "headline": short title like "2nd House — Cancer · Money & Security"
-- "meaning": 1-2 full paragraphs. First explain what this area of life actually is in plain language, then what the sign on this cusp means for how THIS person specifically lives it. If planets sit in the house, weave in what their presence intensifies or complicates. Be specific and psychological — no generic keyword lists.
-
-Return all 12 houses in order.`,
-        response_json_schema: HOUSES_SCHEMA,
-        model: "claude_sonnet_4_6"
+      const result = await invokeLLM({
+        action: 'astrology_houses',
+        params: { houseList },
       });
       localStorage.setItem(key, JSON.stringify(result));
       setHouseData(result);

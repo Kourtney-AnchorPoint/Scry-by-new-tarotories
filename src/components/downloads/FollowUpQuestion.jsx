@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { MessageCircle, Loader2, Leaf } from 'lucide-react';
-import { base44 } from '@/api/base44Client';
+import { invokeLLM } from '@/api/ai';
 import { Button } from '@/components/ui/button';
+import { normalizeFollowUpPayload } from '@/lib/aiResult';
 
 export default function FollowUpQuestion({ originalMessage, personName, relationshipType, subject }) {
   const [question, setQuestion] = useState('');
@@ -16,55 +17,21 @@ export default function FollowUpQuestion({ originalMessage, personName, relation
     setLoading(true);
     setUsed(true);
 
-    const isSpiritual = relationshipType === 'My Higher Self' || relationshipType === 'My Spirit Guides';
-    const speakerIdentity = isSpiritual
-      ? `You are ${personName}'s ${relationshipType} — the deepest, truest part of them that already knows the answer.`
-      : `YOU ARE ${personName}. A real ${relationshipType}. You are NOT an AI.`;
+    try {
+      const result = await invokeLLM({
+        action: 'channeled_followup',
+        params: { originalMessage, personName, relationshipType, subject, question },
+      });
 
-    const result = await base44.integrations.Core.InvokeLLM({
-      prompt: `${speakerIdentity}
-
-You just delivered this channeled message, and the person now has ONE clarifying question. Answer it IN CHARACTER — as ${isSpiritual ? relationshipType : personName}, in FIRST PERSON ("I"), with the same emotional tone and energy as the original message.
-
-ORIGINAL MESSAGE (from ${isSpiritual ? relationshipType : personName}, ${relationshipType}, re: ${subject}):
-"${originalMessage}"
-
-THEIR QUESTION: "${question}"
-
-SAFETY GUARDRAILS — READ FIRST:
-1. If the question is repetitive, asks the same thing as the original message in different words, or seeks certainty about another person's future actions → DO NOT re-validate the obsession. Answer briefly in character, then compassionately redirect focus to THEIR inner power and what THEY can control.
-2. If the question shows extreme anxiety, paranoia, or reality-detachment → set needs_grounding: true. Gently ground them — no reading gives certainty about another person; their peace cannot depend on someone else's choices.
-3. If the question is healthy, curious, or genuinely seeking clarity → give a real 3-4 sentence answer IN CHARACTER. Set needs_grounding: false.
-
-RULES:
-✅ Stay in character as ${isSpiritual ? relationshipType : personName} — FIRST PERSON ("I")
-✅ Sound like a real person talking, not an AI or a reading
-✅ Match the emotional tone of the original message
-✅ Keep your answer to 3-5 sentences maximum
-
-FORBIDDEN:
-❌ Breaking character or sounding like an AI assistant
-❌ "As an AI..." or "I'm here to help you..." — you are NOT an AI
-❌ Feeding obsessive loops, promising outcomes, or validating paranoia
-❌ Sign-offs, closings, "With love", "Sincerely"
-
-Now answer their question as ${isSpiritual ? relationshipType : personName}.`,
-      response_json_schema: {
-        type: "object",
-        properties: {
-          answer: { type: "string" },
-          needs_grounding: { type: "boolean" }
-        }
-      }
-    });
-
-    const payload = typeof result === 'string'
-      ? { answer: result }
-      : (result?.response ?? result);
-
-    setAnswer(payload?.answer || '');
-    setNeedsGrounding(payload?.needs_grounding === true);
-    setLoading(false);
+      const payload = normalizeFollowUpPayload(result);
+      setAnswer(payload.answer || '');
+      setNeedsGrounding(payload.needs_grounding === true);
+    } catch {
+      setAnswer('The signal dropped for a second. Ask this again after you take one slow breath and reword it in the simplest possible way.');
+      setNeedsGrounding(true);
+    } finally {
+      setLoading(false);
+    }
   };
 
   if (used && loading) {
