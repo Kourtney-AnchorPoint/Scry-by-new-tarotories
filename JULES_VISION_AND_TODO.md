@@ -11,7 +11,18 @@ Do not rebuild SCRY from scratch. Do not flatten it into a generic tarot app. Do
 - AWS Amplify app ID: `d9v72l1if77fe`
 - AWS region: `us-east-1`
 - Primary local project folder: `scry-modernized`
-- Current direction: AWS Amplify, Cognito, AppSync/DynamoDB-style data, Lambda/API functions, S3 uploads, Stripe, analytics, and later mobile packaging.
+- Current direction: AWS Amplify, Cognito, AppSync/DynamoDB-style data, Lambda/API functions, S3 uploads, Wix Payments, analytics, and later mobile packaging.
+
+## Reference material note
+
+The old/current Base44 version is not the deployment target, but it may contain newer product ideas that should be reviewed before rebuilding matching areas.
+
+Latest owner note:
+
+- Base44 Insights were improved and made deeper.
+- Base44 Astrology was also improved.
+
+Agents should inspect the latest Base44 version as reference before replacing or rebuilding Insights and Astrology in this repo. Do not blindly copy Base44 dependencies back into this app. Extract the product behavior, content ideas, prompts, structure, and UX improvements, then rebuild them in the AWS/GitHub codebase.
 
 ## The product vision
 
@@ -60,7 +71,7 @@ Autonomous agents must follow these rules:
 1. Do not rewrite the app from scratch.
 2. Do not remove existing app rooms.
 3. Do not reintroduce Base44 dependencies.
-4. Do not hardcode secrets, Stripe keys, AWS keys, OpenAI/Anthropic keys, or private credentials.
+4. Do not hardcode secrets, Wix payment credentials, AWS keys, OpenAI/Anthropic keys, or private credentials.
 5. Do not commit generated build folders, zip deployment packages, browser screenshots, logs, or local environment files.
 6. Do not expose private journal text, private user questions, raw saved readings, payment details, or secrets in analytics.
 7. Do not use AI to calculate astrology positions. Deterministic code calculates planets, houses, aspects, rising signs, transits, and timing. AI may interpret verified chart data only.
@@ -318,16 +329,18 @@ Required:
 
 ### 10. Premium / Subscription
 
-Current Stripe state is not finished. Do not trust old Base44 Stripe functions.
+Payment direction changed: Stripe is no longer the target because it kept failing. Use Wix Payments for checkout/subscription direction unless the owner explicitly changes this later.
+
+Do not trust old Base44 Stripe functions. Do not build new Stripe work unless specifically asked.
 
 Required:
 
-- Stripe monthly plan
-- Stripe annual plan
+- Wix Payments monthly plan
+- Wix Payments annual plan
 - optional trial
-- Checkout
-- Customer Portal
-- webhook Lambda with signature verification
+- checkout
+- customer billing/subscription management path
+- webhook/event handling with signature or authenticity verification where Wix supports it
 - server-side premium status
 - manual premium grants
 - premium expiration dates
@@ -564,18 +577,19 @@ Replace remaining fragile/local/fallback behavior with real AWS services:
 - [ ] Remove any remaining Base44-specific runtime dependencies.
 - [ ] Add a clear developer README section for local setup/build/deploy.
 
-### P1 — Stripe and premium
+### P1 — Wix Payments and premium
 
-- [ ] Create Stripe products/prices for monthly and annual.
-- [ ] Build AWS Checkout Session function.
-- [ ] Build AWS Customer Portal function.
-- [ ] Build Stripe webhook Lambda.
+- [ ] Confirm exact Wix Payments/subscription architecture.
+- [ ] Create Wix Payments products/plans for monthly and annual.
+- [ ] Build checkout/subscription start flow.
+- [ ] Build billing/subscription management flow.
+- [ ] Build Wix payment/subscription event handling.
 - [ ] Store subscription state server-side.
 - [ ] Build premium entitlement checks.
 - [ ] Build owner manual premium grants.
 - [ ] Build premium grant audit log.
-- [ ] Test Stripe end-to-end in test mode.
-- [ ] Switch to live Stripe only after test-mode walkthrough is clean.
+- [ ] Test Wix Payments end-to-end in sandbox/test mode if available.
+- [ ] Switch to live payments only after test walkthrough is clean.
 
 ### P1 — Owner Studio
 
@@ -680,7 +694,7 @@ If using Jules or another autonomous coding agent, assign one bounded task at a 
 2. Add `.env.example` and clean README setup instructions.
 3. Build `/owner` shell with owner-only route guard.
 4. Build manual premium grants in backend and UI.
-5. Build Stripe Checkout in test mode.
+5. Build Wix Payments checkout/subscription flow in test/sandbox mode if available.
 6. Build analytics event dashboard shell.
 7. Finish cloud saved readings.
 8. Finish journal cloud sync.

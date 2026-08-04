@@ -17,7 +17,7 @@ That document contains the product vision, agent rules, room-by-room requirement
 - Hosting: AWS Amplify
 - Auth: Amazon Cognito direction
 - Data/API: AWS-backed AppSync/DynamoDB/Lambda direction
-- Payments: Stripe, not finished yet
+- Payments: Wix Payments direction, not finished yet
 - Source control: GitHub
 - Live app: https://main.d9v72l1if77fe.amplifyapp.com
 
@@ -58,6 +58,6 @@ The app has been manually deployed to AWS Amplify using a packaged `dist` ZIP. T
 
 1. Connect Amplify to GitHub.
 2. Add safe environment/config documentation.
-3. Build Stripe checkout/subscription verification.
+3. Build Wix Payments checkout/subscription verification.
 4. Build owner/admin room for analytics, user lookup, and manual premium grants.
 5. Finish backend persistence for readings, journal, altar, premium state, and analytics.
