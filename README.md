@@ -1,39 +1,63 @@
-**Welcome to your Base44 project** 
+# SCRY by New Tarotories
 
-**About**
+SCRY is a dark-cosmic spiritual toolkit for tarot, oracle, astrology, numerology, channeled messages, journaling, ritual work, and intuitive self-reflection.
 
-View and Edit  your app on [Base44.com](http://Base44.com) 
+This is not a generic tarot app. It is intended to become a premium “witch’s toolkit” with a direct, grounded, emotionally honest voice.
 
-This project contains everything you need to run your app locally.
+## Start here
 
-**Edit the code in your local development environment**
+Autonomous coding agents should read this first:
 
-Any change pushed to the repo will also be reflected in the Base44 Builder.
+[JULES_VISION_AND_TODO.md](./JULES_VISION_AND_TODO.md)
 
-**Prerequisites:** 
+That document contains the product vision, agent rules, room-by-room requirements, and prioritized TODO list.
 
-1. Clone the repository using the project's Git URL 
-2. Navigate to the project directory
-3. Install dependencies: `npm install`
-4. Create an `.env.local` file and set the right environment variables
+## Current direction
 
+- Hosting: AWS Amplify
+- Auth: Amazon Cognito direction
+- Data/API: AWS-backed AppSync/DynamoDB/Lambda direction
+- Payments: Stripe, not finished yet
+- Source control: GitHub
+- Live app: https://main.d9v72l1if77fe.amplifyapp.com
+
+## Important rules
+
+- Do not rebuild from scratch.
+- Do not remove existing rooms or working fallbacks.
+- Do not reintroduce Base44 dependencies.
+- Do not commit secrets.
+- Do not commit generated builds, deployment ZIPs, browser screenshots, logs, or `.env` files.
+- Run a production build before claiming a coding task is done.
+
+## Local development
+
+Install dependencies:
+
+```powershell
+npm install
 ```
-VITE_BASE44_APP_ID=your_app_id
-VITE_BASE44_APP_BASE_URL=your_backend_url
 
-e.g.
-VITE_BASE44_APP_ID=cbef744a8545c389ef439ea6
-VITE_BASE44_APP_BASE_URL=https://my-to-do-list-81bfaad7.base44.app
+Run locally:
+
+```powershell
+npm run dev
 ```
 
-Run the app: `npm run dev`
+Build:
 
-**Publish your changes**
+```powershell
+npm run build
+```
 
-Open [Base44.com](http://Base44.com) and click on Publish.
+## Deployment note
 
-**Docs & Support**
+The app has been manually deployed to AWS Amplify using a packaged `dist` ZIP. The next infrastructure task is to connect Amplify directly to this GitHub repo so future deploys come from `main` instead of manual ZIP uploads.
 
-Documentation: [https://docs.base44.com/Integrations/Using-GitHub](https://docs.base44.com/Integrations/Using-GitHub)
+## Current highest priorities
 
-Support: [https://app.base44.com/support](https://app.base44.com/support)
+1. Connect Amplify to GitHub.
+2. Add safe environment/config documentation.
+3. Build Stripe checkout/subscription verification.
+4. Build owner/admin room for analytics, user lookup, and manual premium grants.
+5. Finish backend persistence for readings, journal, altar, premium state, and analytics.
